@@ -1,0 +1,9 @@
+PyPDF2
+python-docx
+beautifulsoup4
+requests
+reportlab
+tiktoken
+openai
+python-dotenv
+tqdm
