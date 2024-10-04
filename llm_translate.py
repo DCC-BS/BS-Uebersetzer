@@ -58,12 +58,11 @@ def translate_chunk(chunk_text, target_language, context="", llm_name='gpt-4o-mi
         response = llm.chat.completions.create(
             model=llm_name,
             messages=[
-                {"role": "system", "content": f"You are a helpful assistant that translates text to {target_language}."},
+                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English and Italian languages. Translate the given text to {target_language}. For German output use Swiss German writing, i.e. use ss instead of ß."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1
         )
-        print(response)
         translated_text = response.choices[0].message.content.strip()
         logger.debug(f"Received translation of length {len(translated_text)}")
         return translated_text
