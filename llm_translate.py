@@ -1,10 +1,8 @@
-import tiktoken
 import openai
 import logging
 from tqdm import tqdm
 import os
 import httpx
-import json
 import contextlib
 from contextvars import ContextVar
 
@@ -27,43 +25,40 @@ def suppress_output():
         logging.getLogger().setLevel(original_log_level)
         tqdm_disabled.reset(t)
 
-def get_tokenizer():
-    """Initialize and return the GPT-4 tokenizer."""
-    logger.debug("Initializing GPT-4 tokenizer")
-    return tiktoken.encoding_for_model("gpt-4o")
-
-def tokenize_text(text, tokenizer):
-    """Tokenize the input text using the provided tokenizer."""
-    logger.debug(f"Tokenizing text of length {len(text)}")
-    return tokenizer.encode(text)
-
-def split_into_chunks(tokens, max_tokens=20000, overlap=500):
-    """Split tokens into chunks with overlap."""
-    logger.info(f"Splitting {len(tokens)} tokens into chunks (max_tokens={max_tokens}, overlap={overlap})")
+def split_into_chunks(text, max_length=5000, overlap=200):
+    """Split text into chunks based on string length with overlap."""
+    logger.info(f"Splitting text of length {len(text)} into chunks (max_length={max_length}, overlap={overlap})")
     chunks = []
     start = 0
-    with tqdm(total=len(tokens), desc="Splitting into chunks", disable=tqdm_disabled.get()):
-        while start < len(tokens):
-            end = start + max_tokens
-            if end >= len(tokens):
-                chunks.append(tokens[start:])
-                start = len(tokens) + 1
+    with tqdm(total=len(text), desc="Splitting into chunks", disable=tqdm_disabled.get()):
+        while start < len(text):
+            end = start + max_length
+            if end >= len(text):
+                chunks.append(text[start:])
+                start = len(text) + 1
             else:
-                last_period = find_last_period(tokens, start, end, overlap)
-                chunks.append(tokens[start:last_period])
+                last_period = find_last_period(text, start, end, overlap)
+                chunks.append(text[start:last_period])
                 start = last_period
     logger.info(f"Split into {len(chunks)} chunks")
     return chunks
 
-def find_last_period(tokens, start, end, overlap):
+def find_last_period(text, start, end, overlap):
     """Find the last period within the overlap region."""
-    tokenizer = get_tokenizer()
     overlap_start = max(start, end - overlap)
-    overlap_end = min(end + overlap, len(tokens))
+    overlap_end = min(end + overlap, len(text))
     for i in range(overlap_end - 1, overlap_start - 1, -1):
-        if tokenizer.decode([tokens[i]]) == '.':
+        if text[i] == '.':
             return i + 1
     return overlap_end
+
+def find_context_start(text, end, overlap):
+    """Find the start of the context, beginning from a period."""
+    start = max(0, end - overlap)
+    for i in range(end - overlap, 0, -1):
+        if text[i] == '.':
+            return i + 1
+    return start
 
 def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
     """Translate a single chunk of text."""
@@ -92,19 +87,19 @@ def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
     except openai.OpenAIError as e:
         logger.error(f"An error occurred while translating: {e}")
         return None
-
-def translate_chunks(chunks, target_language, tokenizer, llm):
+    
+def translate_chunks(chunks, target_language, llm, overlap):
     """Translate all chunks and maintain context between them."""
     translated_chunks = []
     logger.info(f"Translating {len(chunks)} chunks to {target_language}")
     with tqdm(total=len(chunks), desc="Translating chunks", disable=tqdm_disabled.get()) as pbar:
         for i, chunk in enumerate(chunks):
-            chunk_text = tokenizer.decode(chunk)
             context = ""
             if i > 0:
-                context = f"Previous translated text as context: {translated_chunks[-1][-100:]}\n\n"
+                context_start = find_context_start(translated_chunks[-1], len(translated_chunks[-1]), overlap)
+                context = f"Previous translated text as context: {translated_chunks[-1][context_start:]}\n\n"
             
-            translated_chunk = translate_chunk(chunk_text, target_language, context, llm)
+            translated_chunk = translate_chunk(chunk, target_language, context, llm)
             if translated_chunk:
                 translated_chunks.append(translated_chunk)
                 pbar.update(1)
@@ -113,21 +108,11 @@ def translate_chunks(chunks, target_language, tokenizer, llm):
                 return None
     return translated_chunks
 
-def combine_translations(translated_chunks):
-    """Combine translated chunks into a single text."""
-    logger.info(f"Combining {len(translated_chunks)} translated chunks")
-    final_translation = " ".join(translated_chunks)
-    if len(final_translation) == 0:
-        raise ValueError("Produced an empty translation.")
-    return final_translation
-
-def chunk_and_translate(text, target_language, max_tokens=10000, overlap=500, llm="gpt-4o-mini"):
+def chunk_and_translate(text, target_language, max_length=5000, overlap=200, llm="gpt-4o-mini"):
     """Main function to chunk, translate, and combine text."""
     logger.info(f"Starting translation process for text of length {len(text)} to {target_language}")
-    tokenizer = get_tokenizer()
-    tokens = tokenize_text(text, tokenizer)
-    chunks = split_into_chunks(tokens, max_tokens, overlap)
-    translated_chunks = translate_chunks(chunks, target_language, tokenizer, llm)
+    chunks = split_into_chunks(text, max_length, overlap)
+    translated_chunks = translate_chunks(chunks, target_language, llm, overlap)
     if translated_chunks:
         final_translation = combine_translations(translated_chunks)
         logger.info(f"Translation completed. Final length: {len(final_translation)}")
@@ -135,39 +120,10 @@ def chunk_and_translate(text, target_language, max_tokens=10000, overlap=500, ll
     logger.error("Translation process failed")
     return None
 
-def eval_translation(eval_file: str, target_language: str, llm: str, output_file: str):
-    """
-    Evaluation translation mode.
-    Reads the eval file and generates a translation for every line in the file.
-    The generated translations will be written to output_file containing one translation per line.
-    eval_file: Path to eval file. Expected to have one sentence per line.
-    target_language: Lang to translate to
-    llm: LLM to use for the translation task
-    output_file: Path to the output file
-    """
-    logger.info(f"Starting evaluation translation mode for file: {eval_file}")
-    
-    with open(eval_file, 'r', encoding='utf-8') as f:
-        sentences = f.readlines()
-    
-    logger.info(f"Read {len(sentences)} sentences from {eval_file}")
-    
-    translated_sentences = []
-    with tqdm(total=len(sentences), desc="Translating sentences") as pbar:
-        for sentence in sentences:
-            logger.disabled = True
-            with suppress_output():
-                translated_sentence = chunk_and_translate(sentence.strip(), target_language, llm=llm)
-            logger.disabled = False
-            if translated_sentence:
-                translated_sentences.append(translated_sentence)
-            else:
-                logger.error(f"Failed to translate sentence: {sentence}")
-                translated_sentences.append("")
-            pbar.update(1)
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
-        for translation in translated_sentences:
-            f.write(f"{translation}\n")
-    
-    logger.info(f"Evaluation translation completed. Output written to {output_file}")
+def combine_translations(translated_chunks):
+    """Combine translated chunks into a single text."""
+    logger.info(f"Combining {len(translated_chunks)} translated chunks")
+    final_translation = " ".join(translated_chunks)
+    if len(final_translation) == 0:
+        raise ValueError("Produced an empty translation.")
+    return final_translation
