@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
+import zipfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -113,3 +114,12 @@ def write_translated_doc(translated_text, output_file, translation_method):
     doc.add_paragraph(translated_text)
 
     doc.save(output_file)
+
+def extract_xml_from_docx(docx_file_path, xml_file_name):
+    # Open the .docx (which is a zip file)
+    with zipfile.ZipFile(docx_file_path, 'r') as docx:
+        # Extract the specified XML file (e.g., document.xml)
+        with docx.open(xml_file_name) as xml_file:
+            # Read the file content as a string
+            xml_content = xml_file.read().decode('utf-8')
+            return xml_content

@@ -63,11 +63,11 @@ def find_context_start(text, end, overlap):
 def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
     """Translate a single chunk of text."""
     if "pappai01" in os.getenv("BASE_URL"):
-        client = openai.OpenAI(api_key="DummyValue", base_url=os.getenv("BASE_URL"))
+        client = openai.OpenAI(base_url=os.getenv("BASE_URL"))
     else:
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=httpx.Client(proxy=os.getenv("PROXY_URL")), base_url=os.getenv("BASE_URL"))
 
-    prompt = f"{context}Translate the following text to {target_language}: {chunk_text}"
+    prompt = f"{context}Translate the following content of the XML from a Word document and keep the formatting to {target_language}: {chunk_text}"
 
     print(prompt)
     
@@ -76,7 +76,7 @@ def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
         response = client.chat.completions.create(
             model=llm,
             messages=[
-                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English and Italian languages. Translate the given text to {target_language}. For German output use Swiss German writing, i.e. use ss instead of ß. Do not use mark down formating. Do not modify the meaning of the text. Do not leave out parts of the text. Every sentence needs to be translated."},
+                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English and Italian languages. Translate the following content of the XML from a Word document and keep the formatting to {target_language}. For German output use Swiss German writing, i.e. use ss instead of ß. Do not use mark down formating. Do not modify the meaning of the text. Do not leave out parts of the text. Every sentence needs to be translated."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1
