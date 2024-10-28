@@ -1,5 +1,7 @@
+import os
 import requests
 import logging
+import shutil
 from PyPDF2 import PdfReader
 from docx import Document
 from bs4 import BeautifulSoup
@@ -123,3 +125,16 @@ def extract_xml_from_docx(docx_file_path, xml_file_name):
             # Read the file content as a string
             xml_content = xml_file.read().decode('utf-8')
             return xml_content
+
+def copy_to_output_directory(input_file_path):
+    # Replace '/input/' with '/output/' in the file path
+    output_file_path = input_file_path.replace('/input/', '/output/')
+    
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_file_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Copy the file to the output directory
+    shutil.copy(input_file_path, output_file_path)
+    
+    return output_file_path

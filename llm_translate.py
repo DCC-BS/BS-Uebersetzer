@@ -5,7 +5,9 @@ import os
 import httpx
 import contextlib
 from contextvars import ContextVar
-
+import zipfile
+import xml.etree.ElementTree as ET
+from io import BytesIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,19 +71,20 @@ def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
 
     prompt = f"{context}Translate the following content of the XML from a Word document and keep the formatting to {target_language}: {chunk_text}"
 
-    print(prompt)
-    
     try:
         logger.debug(f"Sending translation request for chunk of length {len(chunk_text)}")
         response = client.chat.completions.create(
             model=llm,
             messages=[
-                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English and Italian languages. Translate the following content of the XML from a Word document and keep the formatting to {target_language}. For German output use Swiss German writing, i.e. use ss instead of ß. Do not use mark down formating. Do not modify the meaning of the text. Do not leave out parts of the text. Every sentence needs to be translated."},
+                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English, and Italian languages. Translate the following content of the XML from a Word document and keep the formatting to {target_language}. Only return the translated text without any additional explanation or context. For German output use Swiss German writing, i.e., use 'ss' instead of 'ß'. Do not use markdown formatting. Do not modify the meaning of the text. Do not leave out parts of the text. Every sentence needs to be translated."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1
         )
+        # Extracting just the translation by cleaning up potential extra text.
         translated_text = response.choices[0].message.content.strip()
+        # Removing any potential leading instructions or extra text if it persists
+        translated_text = translated_text.split('\n', 1)[-1].strip()
         logger.debug(f"Received translation of length {len(translated_text)}")
         return translated_text
     except openai.OpenAIError as e:
@@ -119,6 +122,39 @@ def chunk_and_translate(text, target_language, max_length=5000, overlap=200, llm
         return final_translation
     logger.error("Translation process failed")
     return None
+
+def translate_document(docx_input_path, docx_output_path, target_language, max_length=5000, overlap=200, llm="gpt-4o-mini"):
+    # Open the input .docx file as a zip archive
+    with zipfile.ZipFile(docx_input_path, 'r') as docx:
+        # Extract document.xml content
+        with docx.open('word/document.xml') as xml_file:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            
+            # Namespace setup to handle XML tags
+            namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+            
+            # Iterate over all text elements and apply the translate function
+            for elem in root.findall('.//w:t', namespaces):
+                original_text = elem.text
+                if original_text:  # Only translate non-empty text nodes
+                    elem.text = chunk_and_translate(original_text, target_language, max_length, overlap, llm)
+                    
+            # Write modified XML content to a BytesIO object
+            modified_xml = BytesIO()
+            tree.write(modified_xml, encoding='utf-8', xml_declaration=True)
+            modified_xml.seek(0)
+
+    # Copy input docx contents to output docx, replacing document.xml with modified content
+    with zipfile.ZipFile(docx_input_path, 'r') as docx, zipfile.ZipFile(docx_output_path, 'w') as docx_out:
+        for item in docx.infolist():
+            if item.filename != 'word/document.xml':
+                # Copy other files unchanged
+                docx_out.writestr(item, docx.read(item.filename))
+            else:
+                # Write modified document.xml
+                docx_out.writestr('word/document.xml', modified_xml.read())
+
 
 def combine_translations(translated_chunks):
     """Combine translated chunks into a single text."""
