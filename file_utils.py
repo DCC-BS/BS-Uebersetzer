@@ -117,14 +117,11 @@ def write_translated_doc(translated_text, output_file, translation_method):
 
     doc.save(output_file)
 
-def extract_xml_from_docx(docx_file_path, xml_file_name):
-    # Open the .docx (which is a zip file)
-    with zipfile.ZipFile(docx_file_path, 'r') as docx:
-        # Extract the specified XML file (e.g., document.xml)
-        with docx.open(xml_file_name) as xml_file:
-            # Read the file content as a string
-            xml_content = xml_file.read().decode('utf-8')
-            return xml_content
+def extract_document_xml(docx_path):
+    """Extract the document.xml content from a .docx file as plain text."""
+    with zipfile.ZipFile(docx_path, 'r') as docx:
+        with docx.open('word/document.xml') as xml_file:
+            return xml_file.read().decode('utf-8')
 
 def copy_to_output_directory(input_file_path):
     # Replace '/input/' with '/output/' in the file path

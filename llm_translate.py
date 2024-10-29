@@ -6,8 +6,10 @@ import httpx
 import contextlib
 from contextvars import ContextVar
 import zipfile
-import xml.etree.ElementTree as ET
+import re
+from lxml import etree
 from io import BytesIO
+from file_utils import extract_document_xml
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -63,29 +65,42 @@ def find_context_start(text, end, overlap):
     return start
 
 def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
-    """Translate a single chunk of text."""
+    """Translate a single chunk of XML text and extract translated text from <w:t> tags."""
     if "pappai01" in os.getenv("BASE_URL"):
         client = openai.OpenAI(base_url=os.getenv("BASE_URL"))
     else:
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=httpx.Client(proxy=os.getenv("PROXY_URL")), base_url=os.getenv("BASE_URL"))
 
-    prompt = f"{context}Translate the following content of the XML from a Word document and keep the formatting to {target_language}: {chunk_text}"
+    prompt = (
+            f"{context}Translate the text below into {target_language}. Each segment is separated by '#'. "
+            "Write 'Here is the translated text:' and then directly the translated text, "
+            "add nothing at the end "
+            "and separate each translated segment by `#` in the response. "
+            f"There should be the same amount of '#' in the translation as in the original text\n\n{chunk_text}"
+        )
 
     try:
         logger.debug(f"Sending translation request for chunk of length {len(chunk_text)}")
         response = client.chat.completions.create(
             model=llm,
             messages=[
-                {"role": "system", "content": f"You are an expert translator with fluency in German, French, English, and Italian languages. Translate the following content of the XML from a Word document and keep the formatting to {target_language}. Only return the translated text without any additional explanation or context. For German output use Swiss German writing, i.e., use 'ss' instead of 'ß'. Do not use markdown formatting. Do not modify the meaning of the text. Do not leave out parts of the text. Every sentence needs to be translated."},
+                {"role": "system", "content": (
+                    "You are an expert translator fluent in German, French, English, and Italian. "
+                    f"Translate the text into {target_language}.  "
+                    "For German, use Swiss German conventions ('ss' instead of 'ß'). "
+                    "Translate each sentence completely, without omitting any parts."
+                )},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1
         )
-        # Extracting just the translation by cleaning up potential extra text.
         translated_text = response.choices[0].message.content.strip()
-        # Removing any potential leading instructions or extra text if it persists
-        translated_text = translated_text.split('\n', 1)[-1].strip()
         logger.debug(f"Received translation of length {len(translated_text)}")
+
+        # Check for the introductory phrase and extract XML content following it
+        if translated_text.startswith("Here is the translated text:"):
+            translated_text = translated_text[len("Here is the translated text:"):].strip()
+
         return translated_text
     except openai.OpenAIError as e:
         logger.error(f"An error occurred while translating: {e}")
@@ -123,38 +138,69 @@ def chunk_and_translate(text, target_language, max_length=5000, overlap=200, llm
     logger.error("Translation process failed")
     return None
 
-def translate_document(docx_input_path, docx_output_path, target_language, max_length=5000, overlap=200, llm="gpt-4o-mini"):
-    # Open the input .docx file as a zip archive
-    with zipfile.ZipFile(docx_input_path, 'r') as docx:
-        # Extract document.xml content
-        with docx.open('word/document.xml') as xml_file:
-            tree = ET.parse(xml_file)
-            root = tree.getroot()
-            
-            # Namespace setup to handle XML tags
-            namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-            
-            # Iterate over all text elements and apply the translate function
-            for elem in root.findall('.//w:t', namespaces):
-                original_text = elem.text
-                if original_text:  # Only translate non-empty text nodes
-                    elem.text = chunk_and_translate(original_text, target_language, max_length, overlap, llm)
-                    
-            # Write modified XML content to a BytesIO object
-            modified_xml = BytesIO()
-            tree.write(modified_xml, encoding='utf-8', xml_declaration=True)
-            modified_xml.seek(0)
+def translate_paragraphs(xml_text, target_language, max_length=5000, overlap=200, llm="gpt-4o-mini"):
+    """Translate each <w:p> tag content individually and replace the original in-place."""
+    # Parse XML to avoid disturbing structure and handle namespaces
+    tree = etree.fromstring(xml_text.encode('utf-8'))
+    namespace = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+    
+    # Find all <w:p> tags
+    paragraphs = tree.findall(".//w:p", namespaces=namespace)
+    
+    for paragraph in paragraphs:
+        # Gather all text segments within the paragraph's <w:t> tags
+        texts = paragraph.findall(".//w:t", namespaces=namespace)
+        paragraph_text = '#'.join([t.text or '' for t in texts])
 
-    # Copy input docx contents to output docx, replacing document.xml with modified content
+        # Translate each paragraph's full text and update in place
+        translated_text = chunk_and_translate(paragraph_text, target_language, max_length, overlap, llm)
+        
+        if translated_text:
+            # Split translated text to match the number of <w:t> tags
+            split_texts = split_text(translated_text, len(texts))
+            for t, new_text in zip(texts, split_texts):
+                t.text = new_text
+        else:
+            logger.error("Translation failed for a paragraph.")
+            return None
+
+    return etree.tostring(tree, encoding='utf-8').decode('utf-8')
+
+def translate_document(docx_input_path, docx_output_path, target_language, max_length=5000, overlap=200, llm="gpt-4o-mini"):
+    # Extract the raw XML text from document.xml
+    xml_text = extract_document_xml(docx_input_path)
+    
+    # Translate each <w:p> tag individually without disturbing the structure
+    translated_xml_text = translate_paragraphs(xml_text, target_language, max_length, overlap, llm)
+    
+    if translated_xml_text is None:
+        logger.error("Translation process failed.")
+        return
+
+    # Write the modified XML content back to document.xml in a new .docx file
     with zipfile.ZipFile(docx_input_path, 'r') as docx, zipfile.ZipFile(docx_output_path, 'w') as docx_out:
         for item in docx.infolist():
             if item.filename != 'word/document.xml':
                 # Copy other files unchanged
                 docx_out.writestr(item, docx.read(item.filename))
             else:
-                # Write modified document.xml
-                docx_out.writestr('word/document.xml', modified_xml.read())
+                # Write the modified document.xml
+                docx_out.writestr('word/document.xml', translated_xml_text)
 
+def split_text(text, n_parts):
+    """Helper function to split text by '#' for distribution across tags."""
+    split_texts = text.split('#')
+    
+    # Ensure the number of split parts matches n_parts
+    if len(split_texts) != n_parts:
+        logger.warning("Mismatch in number of text parts after splitting. Adjusting to fit tags.")
+        # Adjust by adding empty strings if split_texts has fewer parts than n_parts
+        while len(split_texts) < n_parts:
+            split_texts.append('')
+        # Or join extra parts if there are more than n_parts
+        split_texts = split_texts[:n_parts]
+    
+    return split_texts
 
 def combine_translations(translated_chunks):
     """Combine translated chunks into a single text."""
