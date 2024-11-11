@@ -1,11 +1,7 @@
-import requests
 import logging
 from PyPDF2 import PdfReader
 from docx import Document
-from bs4 import BeautifulSoup
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib import colors
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,8 +16,6 @@ def load_content(file_path):
         return load_pdf(file_path)
     elif file_path.endswith('.docx'):
         return load_word(file_path)
-    elif file_path.startswith('http'):
-        return load_html(file_path)
     else:
         logger.error(f"Unsupported file format: {file_path}")
         raise ValueError("Unsupported file format")
@@ -52,28 +46,13 @@ def load_word(file_path):
         logger.error(f"Error loading Word document {file_path}: {str(e)}")
         raise
 
-def load_html(url):
-    logger.info(f"Loading HTML content from URL: {url}")
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        main_content = soup.find('main') or soup.find('article') or soup.find('div', class_='content')
-        
-        if main_content:
-            logger.info(f"Main content found and extracted from URL: {url}")
-            return main_content.get_text(strip=True)
-        else:
-            logger.warning(f"No main content found, extracting all text from URL: {url}")
-            return soup.get_text(strip=True)
-    except Exception as e:
-        logger.error(f"Error loading HTML content from {url}: {str(e)}")
-        raise
-
 def generate_comparison_output(original_text, translated_text, output_file, translation_method: str):
     """
     Generate a PDF or Word file with a side-by-side comparison of original and translated text.
     """
+    base_path = os.path.dirname(output_file)
+    os.makedirs(base_path, exist_ok=True)
+
     logger.info(f"Generating comparison output: {output_file}")
     if output_file.endswith('.pdf'):
         output_file = output_file.replace('.pdf', '.docx')

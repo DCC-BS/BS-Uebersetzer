@@ -68,8 +68,6 @@ def translate_chunk(chunk_text, target_language, context="", llm='gpt-4o-mini'):
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=httpx.Client(proxy=os.getenv("PROXY_URL")), base_url=os.getenv("BASE_URL"))
 
     prompt = f"{context}Translate the following text to {target_language}: {chunk_text}"
-
-    print(prompt)
     
     try:
         logger.debug(f"Sending translation request for chunk of length {len(chunk_text)}")
