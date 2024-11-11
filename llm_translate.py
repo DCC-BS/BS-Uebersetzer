@@ -53,6 +53,7 @@ def translate_text(text, target_language="de-CH", llm='gpt-4'):
         "3. Preserve all original formatting, including whitespace and special characters at the beginning and end of the text.\n"
         "4. Do not include any additional text or comments.\n\n"
         "IMPORTANT: Do not include any additional text, explanations, or comments. Only provide the translated text.\n"
+        "Only provide the translated text, and enclose it within # symbols, like #...#.\n\n"
     )
 
     try:
@@ -64,12 +65,21 @@ def translate_text(text, target_language="de-CH", llm='gpt-4'):
                     "You are a professional translator. "
                     f"Translate the following text into {target_language}, ensuring proper grammar and spelling. "
                     "Preserve any whitespace or special characters at the beginning and end of the text."
+                    "Do not include any additional text, explanations, or comments. "
+                    "Only provide the translated text, and enclose it within # symbols, like #...#."
                 )},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1
         )
         translated_text = response.choices[0].message.content.strip()
+        match = re.search(r'#(.*?)#', translated_text, re.DOTALL)
+        if match:
+            translated_text = match.group(1).strip()
+        else:
+            # If no hashes found, log a warning and use the entire response
+            logger.warning("Expected translation enclosed in hashes, but none found. Using the entire response.")
+            translated_text = translated_text.strip()
         # Replace 'ß' with 'ss'
         translated_text = translated_text.replace('ß', 'ss')
         logger.debug(f"Translated text: {translated_text}")
