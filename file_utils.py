@@ -92,3 +92,15 @@ def write_translated_doc(translated_text, output_file, translation_method):
     doc.add_paragraph(translated_text)
 
     doc.save(output_file)
+
+
+def load_word(file_path):
+    logger.info(f"Loading Word document: {file_path}")
+    try:
+        doc = Document(file_path)
+        # Extract main text, headers, and footers
+        text = " ".join([paragraph.text for paragraph in doc.paragraphs])
+        return doc, text
+    except Exception as e:
+        logger.error(f"Error loading Word document {file_path}: {str(e)}")
+        raise

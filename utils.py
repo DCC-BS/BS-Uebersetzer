@@ -63,7 +63,7 @@ def split_into_sentences(text: str, language_model: str=None) -> List[str]:
         language_model = _language_to_spacy_model(language)
     nlp = load_spacy_model(language_model)
     doc = nlp(text)
-    sentences = [sent.text.strip() for sent in doc.sents]
+    sentences = [sent.text for sent in doc.sents]
     
     logger.info(f"Split into {len(sentences)} sentences")
     return sentences
