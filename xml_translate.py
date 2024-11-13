@@ -6,6 +6,9 @@ import tempfile
 # import xml.etree.ElementTree as ET
 from lxml import etree as ET
 import openai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 client = openai.OpenAI(api_key="ABC", base_url=os.environ.get("BASE_URL"))
