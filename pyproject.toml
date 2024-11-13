@@ -5,24 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "langdetect>=1.0.9",
     "openai>=1.54.3",
-    "pip>=24.3.1",
-    "pypdf2>=3.0.1",
     "python-docx>=1.1.2",
-    "python-dotenv>=1.0.1",
-    "sacrebleu>=2.4.3",
-    "sentencepiece>=0.2.0",
-    "spacy>=3.8.2",
-    "tqdm>=4.67.0",
-    "transformers>=4.46.2",
-    "torch>=2.5.1",
+    "streamlit>=1.40.1",
 ]
-
-[tool.uv.sources]
-torch = { index = "pytorch" }
-
-[[tool.uv.index]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true
