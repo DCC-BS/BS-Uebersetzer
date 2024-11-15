@@ -80,7 +80,7 @@ def text_section():
     with col1:
         st.selectbox(
             "Ausgangssprache",
-            ["Auto"] + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            ["Auto", "German", "English", "French", "Italian"] + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
             index=0,
             key="source_lang",
         )
@@ -88,7 +88,7 @@ def text_section():
     with col2:
         st.selectbox(
             "Zielsprache",
-            ["German"]
+            ["German", "English", "French", "Italian"]
             + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
             index=0,
             key="target_lang",
@@ -138,6 +138,8 @@ def text_section():
             with st.spinner("Übersetzung läuft..."):
                 translated_text = translate_text(
                     source_text,
+                    source_language=st.session_state.source_lang,
+                    target_language=st.session_state.target_lang,
                     tone=TONE_MAPPING.get(st.session_state.tone),
                     domain=DOMAIN_MAPPING.get(st.session_state.domain),
                 )
