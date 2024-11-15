@@ -55,7 +55,7 @@ def translate_text(
     if not text.strip() or len(text.strip()) == 1:
         return text
 
-    if source_language is None or source_language == "auto":
+    if source_language is None or source_language.lower() == "auto" or source_language.lower() == "automatisch erkennen":
         source_language = detect_language(text)
 
     endswith_r = text.endswith("\r")

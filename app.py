@@ -80,7 +80,8 @@ def text_section():
     with col1:
         st.selectbox(
             "Ausgangssprache",
-            ["Auto", "German", "English", "French", "Italian"] + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            ["Automatisch Erkennen", "German", "English", "French", "Italian"]
+            + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
             index=0,
             key="source_lang",
         )
@@ -99,6 +100,11 @@ def text_section():
             list(TONE_MAPPING.keys()),
             index=0,
             key="tone",
+            help="Wählen Sie den gewünschten Schreibstil für die Übersetzung:\n\n"
+            + "• Keiner: Neutraler, sachlicher Stil\n\n"
+            + "• Formell: Professioneller Stil für offizielle Dokumente\n\n"
+            + "• Informell: Lockerer, persönlicher Konversationsstil\n\n"
+            + "• Technisch: Fachspezifischer Stil mit Fachterminologie",
         )
     with col4:
         st.selectbox(
@@ -106,6 +112,9 @@ def text_section():
             list(DOMAIN_MAPPING.keys()),
             key="domain",
             index=0,
+            help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung. "
+            + "Dies hilft dem System, die richtige Fachterminologie und "
+            + "kontextspezifische Übersetzungen zu verwenden.",
         )
 
     # Create two columns for input and output text
