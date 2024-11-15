@@ -1,41 +1,190 @@
 import streamlit as st
 import tempfile
 import os
-from xml_translate import translate_docx
+from xml_translate import translate_docx, translate_text
+import iso639
+import pyperclip
+
+TONE_MAPPING = {
+    "Keiner": None,
+    "Formell": "Formal",
+    "Informell": "Informal",
+    "Technisch": "Technical"
+}
+
+TONE_MAPPING_REVERSE = {v: k for k, v in TONE_MAPPING.items()}
+
+DOMAIN_MAPPING = {
+    "Keines": None,
+    "Behörden": "Government",
+    "Rechtswesen": "Legal",
+    "Medizin": "Medical",
+    "Technik": "Technical",
+    "Finanzen": "Financial",
+    "Wissenschaft": "Scientific",
+    "Marketing": "Marketing",
+    "Literatur": "Literary",
+    "Bildung": "Educational",
+    "Gastgewerbe und Tourismus": "Hospitality and Tourism",
+    "Informationstechnologie": "Information Technology",
+    "Landwirtschaft": "Agriculture",
+    "Energie": "Energy",
+    "Immobilien": "Real Estate",
+    "Personalwesen": "Human Resources",
+    "Pharmazie": "Pharmaceutical",
+    "Kunst und Kultur": "Art and Culture",
+    "Logistik und Transport": "Logistics and Transportation"
+}
+
+DOMAIN_MAPPING_REVERSE = {v: k for k, v in DOMAIN_MAPPING.items()}
+
+LANGUAGE_MAPPING = {
+    "Automatisch erkennen": "Auto-detect",
+    "Englisch": "English",
+    "Deutsch": "German",
+    "Französisch": "French",
+    "Italienisch": "Italian"
+}
+
+LANGUAGE_MAPPING_REVERSE = {v: k for k, v in LANGUAGE_MAPPING.items()}
+
+def get_language_dict():
+    keys = [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""]
+    values = [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""]
+    return dict(zip(keys, values))
+
+def copy_to_clipboard(text):
+    try:
+        pyperclip.copy(text)
+        st.success("Text wurde in die Zwischenablage kopiert!")
+    except Exception as e:
+        st.error(f"Fehler beim Kopieren: {str(e)}")
 
 def main():
-    st.title("Document Translator")
-    st.write("Upload a Word document (.docx) to translate it to German")
+    st.set_page_config(page_title="BS Übersetzer", page_icon="🌐", layout="wide")
+    st.title("Basel Stadt Übersetzer")
+    
+    with st.expander("⚠️ Disclaimer", expanded=False):
+        st.warning("""
+        **Disclaimer / Haftungsausschluss**
+        
+        Diese Webanwendung verwendet interne Large Language Models (LLMs) zur Verarbeitung Ihrer Anfragen. Alle Daten werden innerhalb des Kantons Basel-Stadt gespeichert und verarbeitet.
 
-    if 'translated_doc' not in st.session_state:
+        **Wichtiger Hinweis:** Diese Anwendung befindet sich im Proof-of-Concept (PoC) Stadium. Es wird keine Garantie für die Verfügbarkeit, Korrektheit oder Vollständigkeit der Ergebnisse übernommen. Die zugrundeliegende KI Plattform befindet sich im aktiven Aufbau, daher können die Antwortzeiten stark variieren.
+
+        Bei Fehlern oder Problemen wenden Sie sich bitte an [Yanick Schraner](mailto:yanick.schraner@bs.ch).
+        """)
+
+    # Text Translation Section
+    st.header("Text übersetzen")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        source_lang = st.selectbox(
+            "Ausgangssprache",
+            ["Auto"] + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            index=0,
+        )
+
+    with col2:
+        target_lang = st.selectbox(
+            "Zielsprache",
+            ["German"]
+            + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            index=0,
+        )
+    with col3:
+        tone = st.selectbox(
+            "Tonalität (Optional)", list(TONE_MAPPING.keys()), index=0
+        )
+    with col4:
+        domain = st.selectbox(
+            "Fachgebiet (Optional)",
+            list(DOMAIN_MAPPING.keys()),
+            index=0,
+        )
+
+    # Create two columns for input and output text
+    text_col1, text_col2 = st.columns(2)
+
+    with text_col1:
+        st.subheader("Ausgangstext")
+        source_text = st.text_area("Text zum Übersetzen eingeben", height=200)
+
+    with text_col2:
+        st.subheader("Übersetzung")
+        # Initialize translated_text in session state if it doesn't exist
+        if 'translated_text' not in st.session_state:
+            st.session_state.translated_text = ""
+        
+        # Display translation text area
+        translation_area = st.text_area(
+            "Übersetzung", 
+            value=st.session_state.translated_text, 
+            height=200,
+            disabled=False  # Make it read-only
+        )
+
+        if st.session_state.translated_text:
+            if st.button("In Zwischenablage kopieren"):
+                copy_to_clipboard(st.session_state.translated_text)
+        
+    if st.button("Übersetzen"):
+        if source_text:
+            with st.spinner('Übersetzung läuft...'):
+                translated_text = translate_text(
+                    source_text, 
+                    tone=TONE_MAPPING.get(tone),
+                    domain=DOMAIN_MAPPING.get(domain)
+                )
+                st.session_state.translated_text = translated_text
+                st.rerun()
+
+    # Separator
+    st.markdown("---")
+
+    # Document Translation Section
+    st.header("Dokumentübersetzung")
+    st.write("Optional können Sie ein Word-Dokument (.docx) zum Übersetzen hochladen")
+
+    # Initialize session state for storing the translated document
+    if "translated_doc" not in st.session_state:
         st.session_state.translated_doc = None
         st.session_state.original_filename = None
 
-    uploaded_file = st.file_uploader("Choose a DOCX file", type="docx")
+    # File uploader
+    uploaded_file = st.file_uploader("DOCX-Datei auswählen", type="docx")
 
-    if uploaded_file is not None and (st.session_state.original_filename != uploaded_file.name):
-        # Reset translated doc if a new file is uploaded
+    if uploaded_file is not None and (
+        st.session_state.original_filename != uploaded_file.name
+    ):
         st.session_state.translated_doc = None
         st.session_state.original_filename = uploaded_file.name
 
-        # Create temporary files
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_input:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_input:
             tmp_input.write(uploaded_file.getvalue())
             input_path = tmp_input.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_output:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_output:
             output_path = tmp_output.name
 
-
         try:
-            with st.spinner('Translating document...'):
-                translate_docx(input_path, output_path)
+            with st.spinner("Übersetzung läuft..."):
+                translate_docx(
+                    input_path,
+                    output_path,
+                    source_language=source_lang,
+                    target_language=target_lang,
+                    tone=TONE_MAPPING.get(tone),
+                    domain=DOMAIN_MAPPING.get(domain),
+                )
 
-            with open(output_path, 'rb') as file:
+            with open(output_path, "rb") as file:
                 st.session_state.translated_doc = file.read()
 
         except Exception as e:
-            st.error(f"An error occurred during translation: {str(e)}")
+            st.error(f"Bei der Übersetzung ist ein Fehler aufgetreten: {str(e)}")
 
         finally:
             try:
@@ -44,23 +193,14 @@ def main():
             except:
                 pass
 
-    # Show download button if we have a translated document
     if st.session_state.translated_doc is not None:
         st.download_button(
-            label="Download translated document",
+            label="Übersetzte Datei herunterladen",
             data=st.session_state.translated_doc,
             file_name=f"translated_{st.session_state.original_filename}",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
 
-    st.markdown("""
-    ### Instructions:
-    1. Upload a Word document (.docx format)
-    2. Wait for the translation to complete
-    3. Download the translated document using the button that appears
-    
-    **Note:** Documents are processed securely and are not stored permanently.
-    """)
 
 if __name__ == "__main__":
     main()
