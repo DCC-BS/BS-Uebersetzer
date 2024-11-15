@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "iso639>=0.1.4",
     "openai>=1.54.3",
+    "pyperclip>=1.9.0",
     "python-docx>=1.1.2",
     "python-dotenv>=1.0.1",
     "streamlit>=1.40.1",

@@ -236,6 +236,12 @@ wheels = [
 ]
 
 [[package]]
+name = "iso639"
+version = "0.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/23/6aecf85ed735ff017af073d1da764b8f24822f8ec17798fc83816d166826/iso639-0.1.4.tar.gz", hash = "sha256:88b70cf6c64ee9c2c2972292818c8beb32db9ea6f4de1f8471a9b081a3d92e98", size = 11042 }
+
+[[package]]
 name = "jinja2"
 version = "3.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -725,12 +731,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pydotenv"
-version = "0.0.7"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0a/3a/e591d413b1258daee35900a4e1f41a887c7500ea0e9423ccbe40ae81a635/pydotenv-0.0.7.tar.gz", hash = "sha256:5f6d78d3a7ed5124d7836bc1beeadd855dab4e2fdbea9338e6ff61dc1e46829f", size = 2029 }
-
-[[package]]
 name = "pygments"
 version = "2.18.0"
 source = { registry = "https://pypi.org/simple" }
@@ -738,6 +738,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/8e/62/8336eff65bcbc8e4c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/3f/01c8b82017c199075f8f788d0d906b9ffbbc5a47dc9918a945e13d5a2bda/pygments-2.18.0-py3-none-any.whl", hash = "sha256:b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a", size = 1205513 },
 ]
+
+[[package]]
+name = "pyperclip"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/23/2f0a3efc4d6a32f3b63cdff36cd398d9701d26cda58e3ab97ac79fb5e60d/pyperclip-1.9.0.tar.gz", hash = "sha256:b7de0142ddc81bfc5c7507eea19da920b92252b548b96186caf94a5e2527d310", size = 20961 }
 
 [[package]]
 name = "python-dateutil"
@@ -980,8 +986,9 @@ name = "translator"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "iso639" },
     { name = "openai" },
-    { name = "pydotenv" },
+    { name = "pyperclip" },
     { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "streamlit" },
@@ -989,8 +996,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "iso639", specifier = ">=0.1.4" },
     { name = "openai", specifier = ">=1.54.3" },
-    { name = "pydotenv", specifier = ">=0.0.7" },
+    { name = "pyperclip", specifier = ">=1.9.0" },
     { name = "python-docx", specifier = ">=1.1.2" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "streamlit", specifier = ">=1.40.1" },

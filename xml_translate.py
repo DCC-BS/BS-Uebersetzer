@@ -79,7 +79,7 @@ def translate_text(
         tone_prompt = "Use a neutral tone that is objective, informative, and unbiased."
 
     if domain is not None:
-        domain_prompt = f"Use terminology and phrases specific to the {domain} to ensure the translation is appropriate for the field."
+        domain_prompt= f"Use terminology and phrases specific to the {domain} to ensure the translation is appropriate for the field."
     else:
         domain_prompt = "No specific domain requirements."
 
