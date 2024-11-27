@@ -5,7 +5,6 @@ import shutil
 import tempfile
 from utils import detect_language
 
-# import xml.etree.ElementTree as ET
 from lxml import etree as ET
 import openai
 from dotenv import load_dotenv
@@ -36,6 +35,7 @@ def translate_text(
     source_language: Optional[str] = None,
     domain: Optional[str] = None,
     tone: Optional[str] = None,
+    glossary: Optional[str] = None,
 ) -> str:
     """
     Translates text to German using the LLM.
@@ -48,6 +48,7 @@ def translate_text(
       source_language (str, optional): The source language for the translation. Defaults to auto-detection.
       domain (str, optional): The domain for the translation.
       tone (str, optional): The tone for the translation.
+      glossary (str, optional): A glossary of terms to be used in the translation.
     Returns:
       str: The translated text.
     """
@@ -55,7 +56,11 @@ def translate_text(
     if not text.strip() or len(text.strip()) == 1:
         return text
 
-    if source_language is None or source_language.lower() == "auto" or source_language.lower() == "automatisch erkennen":
+    if (
+        source_language is None
+        or source_language.lower() == "auto"
+        or source_language.lower() == "automatisch erkennen"
+    ):
         source_language = detect_language(text)
 
     endswith_r = text.endswith("\r")
@@ -79,9 +84,16 @@ def translate_text(
         tone_prompt = "Use a neutral tone that is objective, informative, and unbiased."
 
     if domain is not None:
-        domain_prompt= f"Use terminology and phrases specific to the {domain} to ensure the translation is appropriate for the field."
+        domain_prompt = f"Use terminology and phrases specific to the {domain} to ensure the translation is appropriate for the field."
     else:
         domain_prompt = "No specific domain requirements."
+
+    if glossary is not None:
+        glossary_prompt = f"Use the following glossary to ensure accurate translations. The format of the glossary is term1:description_of_term1;term2:description_of_term2;... Glossary: \n{glossary}"
+    else:
+        glossary_prompt = "No specific glossary provided."
+
+
 
     prompt = f"""You are an expert translator.\n
                 Requirements:\n
@@ -94,9 +106,10 @@ def translate_text(
                     7. Tone: {tone_prompt}\n
                     8. Idioms and Cultural References: Adapt idiomatic expressions and culturally specific references to their equivalents in the target language to maintain meaning and readability.\n
                     9. Source Text Errors: If there are any obvious errors or typos in the source text, correct them in the translation to improve clarity.
-                    10. Formatting: Preserve the original formatting of the text, including line breaks, bullet points, and any emphasis like bold or italics.\n
+                    10. Formatting: Preserve the original markdown formatting of the text, including line breaks, bullet points, and any emphasis like bold or italics.\n
                     11. Special characters: Use '\n' for line breaks. Preserve line breaks and paragraphs as in the source text. Keep carriage return characters ('\r') if they are used in the source text.\n
-                    12. Output Requirements: Provide only the translated text enclosed within <translated_text></translated_text>. Do not add explanations, notes, comments, or any additional text outside of this.
+                    12. Output Requirements: Provide only the translated text enclosed within <translated_text></translated_text>. Do not add explanations, notes, comments, or any additional text outside of this.\n
+                    13. Glossary: {glossary_prompt}
                       \n\n
                 <example>\n
                   Translate the text enclosed in <source_text></source_text> from English to German. \n\n
@@ -109,14 +122,16 @@ def translate_text(
                 <source_text>{text}</source_text>\n
                 <translated_text>"""
     response = client.completions.create(
-        model="llama3.1:70b",
+        model="qwen2.5:72b",
         prompt=prompt,
         temperature=0,
     )
+    print(response.choices[0].text)
+
     translated_text = response.choices[0].text.strip()
     translated_text = translated_text.replace("ß", "ss")
 
-    start_index = translated_text.find("<translated_text>") + len("<translated_text>")
+    start_index = len("<translated_text>") if translated_text.startswith("<translated_text>") else 0
     end_index = translated_text.find("</translated_text>")
     translated_text = translated_text[start_index:end_index]
 
@@ -139,6 +154,8 @@ def process_xml(
     source_language: Optional[str] = None,
     tone: Optional[str] = None,
     domain: Optional[str] = None,
+    glossary: Optional[str] = None,
+
 ) -> None:
     """
     Parses and translates text within an XML file while preserving the structure.
@@ -176,6 +193,7 @@ def process_xml(
                         source_language=source_language,
                         domain=domain,
                         tone=tone,
+                        glossary=glossary,
                     )
                     previous_translation = current_elem.text
 
@@ -194,6 +212,7 @@ def process_xml(
                 source_language=source_language,
                 domain=domain,
                 tone=tone,
+                glossary=glossary,
             )
 
     # Write the modified XML back to file
@@ -207,6 +226,7 @@ def translate_docx(
     source_language: Optional[str] = None,
     tone: Optional[str] = None,
     domain: Optional[str] = None,
+    glossary: Optional[str] = None,
 ) -> None:
     """
     Translates a .docx file to German while preserving formatting.
@@ -234,7 +254,7 @@ def translate_docx(
         for xml_file in xml_files:
             xml_path = os.path.join(temp_dir, xml_file)
             if os.path.exists(xml_path):
-                process_xml(xml_path, target_language, source_language, tone, domain)
+                process_xml(xml_path, target_language, source_language, tone, domain, glossary)
 
         # Rezip the contents into a new .docx file
         with zipfile.ZipFile(output_docx_path, "w", zipfile.ZIP_DEFLATED) as docx:

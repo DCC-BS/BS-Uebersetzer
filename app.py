@@ -12,8 +12,7 @@ from streamlit_theme import st_theme
 
 def main():
     st.set_page_config(page_title="BS Übersetzer", page_icon="🌐", layout="wide")
-    
-    # st.write(theme)
+
     st.title("Basel Stadt Übersetzer")
 
     with st.expander("⚠️ Disclaimer", expanded=False):
@@ -36,7 +35,7 @@ def main():
 def text_section():
     st.header("Text übersetzen")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         st.selectbox(
@@ -75,6 +74,14 @@ def text_section():
             + "Dies hilft dem System, die richtige Fachterminologie und "
             + "kontextspezifische Übersetzungen zu verwenden.",
         )
+    with col5:
+        st.text_input(
+            "Glossar (Optional)",
+            placeholder="Wiese:Ein Fluss in Basel;Wickelfisch:Wasserdichte Schwimmtasche",
+            key="glossary",
+            help="Geben Sie ein benutzerdefiniertes Glossar an, um spezifische Begriffe oder Ausdrücke zu beschreiben. "
+            + "Das Format sollte 'Begriff1:Beschreibung1;Begriff2:Beschreibung2,...' sein.",
+        )
 
     # Create two columns for input and output text
     text_col1, text_col2 = st.columns(2)
@@ -93,14 +100,6 @@ def text_section():
             is_rtl = is_rtl_language(st.session_state.translated_text)
 
         create_text_component(st.session_state.translated_text, is_rtl)
-        # # Display translation text area
-
-        # st.text_area(
-        #     "Übersetzung",
-        #     value=st.session_state.translated_text,
-        #     height=200,
-        #     disabled=True,
-        # )
 
         if st.session_state.translated_text:
             if st.button("In Zwischenablage kopieren"):
@@ -115,6 +114,8 @@ def text_section():
                     target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
                     tone=TONE_MAPPING.get(st.session_state.tone),
                     domain=DOMAIN_MAPPING.get(st.session_state.domain),
+                    glossary=st.session_state.glossary,
+
                 )
                 st.session_state.translated_text = translated_text
                 st.rerun()
@@ -155,6 +156,7 @@ def docx_section():
                     target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
                     tone=TONE_MAPPING.get(st.session_state.tone),
                     domain=DOMAIN_MAPPING.get(st.session_state.domain),
+                    glossary=st.session_state.glossary,
                 )
 
             with open(output_path, "rb") as file:
@@ -167,7 +169,7 @@ def docx_section():
             try:
                 os.unlink(input_path)
                 os.unlink(output_path)
-            except Exception as e:
+            except Exception:
                 pass
 
     if st.session_state.translated_doc is not None:
@@ -209,39 +211,50 @@ def copy_to_clipboard(text):
 
 
 def create_text_component(text, is_rtl=False, height=200):
-    
     theme = "dark" if st.get_option("theme.base") == "dark" else "light"
     text_color = "#FFFFFF" if theme == "dark" else "#31333f"
     bg_color = "#262730" if theme == "dark" else "#f0f2f6"
-    font = '"Source Sans Pro", sans-serif"'
     theme = st_theme()
     try:
         bg_color = theme["secondaryBackgroundColor"]
         text_color = theme["textColor"]
-        font = theme["font"]
-    except:
+    except Exception:
         pass
-
 
     direction = "rtl" if is_rtl else "ltr"
     text_align = "right" if is_rtl else "left"
 
     html = f"""
-    <div style="
+    <style>
+    label {{
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: {text_color};
+    font-family: "Source Sans Pro", sans-serif; 
+    }}
+    textarea {{
+        width: 100%;
+        padding: 16px;
+        border: 1px solid #ccc;
+        border-radius: 5px; 
+        box-sizing: border-box; 
+        resize: vertical;
+        font-family: "Source Sans Pro", sans-serif;
+        background-color: {bg_color};
+        border-color: {bg_color};
+        overflow-y: auto;
+        color: {text_color};
+        caret-color: {text_color};
+        font-size: 16px;
+        height: {height}px;
         direction: {direction}; 
         text-align: {text_align};
-        height: {height}px;
-        overflow-y: auto;
-        padding: 10px;
-        background-color: {bg_color};
-        color: {text_color};
-        font-family: {font};
-        border-radius: 4px;
-        border: 1px solid rgba(128, 128, 128, 0.2);
-    ">
-        {text}
-    </div>
-    """
+    }}
+</style>
+    <label for="translatedText">Übersetzung:</label>
+    <textarea id="translatedText" inputmode="text" rows="3">{text}</textarea>
+"""
     components.html(html, height=height + 30)
 
 
