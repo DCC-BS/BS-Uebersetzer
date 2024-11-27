@@ -1,58 +1,19 @@
 import streamlit as st
 import tempfile
 import os
+from utils import DOMAIN_MAPPING, LANGUAGE_MAPPING, TONE_MAPPING, is_rtl_language
 from xml_translate import translate_docx, translate_text
-import iso639
 import pyperclip
 from pathlib import Path
 import base64
-
-TONE_MAPPING = {
-    "Keiner": None,
-    "Formell": "Formal",
-    "Informell": "Informal",
-    "Technisch": "Technical",
-}
-
-TONE_MAPPING_REVERSE = {v: k for k, v in TONE_MAPPING.items()}
-
-DOMAIN_MAPPING = {
-    "Keines": None,
-    "Behörden": "Government",
-    "Rechtswesen": "Legal",
-    "Medizin": "Medical",
-    "Technik": "Technical",
-    "Finanzen": "Financial",
-    "Wissenschaft": "Scientific",
-    "Marketing": "Marketing",
-    "Literatur": "Literary",
-    "Bildung": "Educational",
-    "Gastgewerbe und Tourismus": "Hospitality and Tourism",
-    "Informationstechnologie": "Information Technology",
-    "Landwirtschaft": "Agriculture",
-    "Energie": "Energy",
-    "Immobilien": "Real Estate",
-    "Personalwesen": "Human Resources",
-    "Pharmazie": "Pharmaceutical",
-    "Kunst und Kultur": "Art and Culture",
-    "Logistik und Transport": "Logistics and Transportation",
-}
-
-DOMAIN_MAPPING_REVERSE = {v: k for k, v in DOMAIN_MAPPING.items()}
-
-LANGUAGE_MAPPING = {
-    "Automatisch erkennen": "Auto-detect",
-    "Englisch": "English",
-    "Deutsch": "German",
-    "Französisch": "French",
-    "Italienisch": "Italian",
-}
-
-LANGUAGE_MAPPING_REVERSE = {v: k for k, v in LANGUAGE_MAPPING.items()}
+import streamlit.components.v1 as components
+from streamlit_theme import st_theme
 
 
 def main():
     st.set_page_config(page_title="BS Übersetzer", page_icon="🌐", layout="wide")
+    
+    # st.write(theme)
     st.title("Basel Stadt Übersetzer")
 
     with st.expander("⚠️ Disclaimer", expanded=False):
@@ -80,8 +41,7 @@ def text_section():
     with col1:
         st.selectbox(
             "Ausgangssprache",
-            ["Automatisch Erkennen", "German", "English", "French", "Italian"]
-            + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            list(LANGUAGE_MAPPING.keys()),
             index=0,
             key="source_lang",
         )
@@ -89,8 +49,7 @@ def text_section():
     with col2:
         st.selectbox(
             "Zielsprache",
-            ["German", "English", "French", "Italian"]
-            + [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""],
+            list(LANGUAGE_MAPPING.keys())[1:],
             index=0,
             key="target_lang",
         )
@@ -126,17 +85,22 @@ def text_section():
 
     with text_col2:
         st.subheader("Übersetzung")
+        is_rtl = False
         # Initialize translated_text in session state if it doesn't exist
         if "translated_text" not in st.session_state:
             st.session_state.translated_text = ""
+        else:
+            is_rtl = is_rtl_language(st.session_state.translated_text)
 
-        # Display translation text area
-        st.text_area(
-            "Übersetzung",
-            value=st.session_state.translated_text,
-            height=200,
-            disabled=False,  # Make it read-only
-        )
+        create_text_component(st.session_state.translated_text, is_rtl)
+        # # Display translation text area
+
+        # st.text_area(
+        #     "Übersetzung",
+        #     value=st.session_state.translated_text,
+        #     height=200,
+        #     disabled=True,
+        # )
 
         if st.session_state.translated_text:
             if st.button("In Zwischenablage kopieren"):
@@ -147,8 +111,8 @@ def text_section():
             with st.spinner("Übersetzung läuft..."):
                 translated_text = translate_text(
                     source_text,
-                    source_language=st.session_state.source_lang,
-                    target_language=st.session_state.target_lang,
+                    source_language=LANGUAGE_MAPPING.get(st.session_state.source_lang),
+                    target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
                     tone=TONE_MAPPING.get(st.session_state.tone),
                     domain=DOMAIN_MAPPING.get(st.session_state.domain),
                 )
@@ -187,8 +151,8 @@ def docx_section():
                 translate_docx(
                     input_path,
                     output_path,
-                    source_language=st.session_state.source_lang,
-                    target_language=st.session_state.target_lang,
+                    source_language=LANGUAGE_MAPPING.get(st.session_state.source_lang),
+                    target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
                     tone=TONE_MAPPING.get(st.session_state.tone),
                     domain=DOMAIN_MAPPING.get(st.session_state.domain),
                 )
@@ -229,16 +193,11 @@ def footer():
                     <img src="data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode()}" width="100">
                 </a>
                 <p style='margin-top: 10px;'>Datenwissenschaften und KI</p>
+                <p>Developped with ❤️ by Data Alchemy Team</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-
-def get_language_dict():
-    keys = [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""]
-    values = [lang["name"] for lang in iso639.data if lang["iso639_1"] != ""]
-    return dict(zip(keys, values))
 
 
 def copy_to_clipboard(text):
@@ -247,6 +206,43 @@ def copy_to_clipboard(text):
         st.success("Text wurde in die Zwischenablage kopiert!")
     except Exception as e:
         st.error(f"Fehler beim Kopieren: {str(e)}")
+
+
+def create_text_component(text, is_rtl=False, height=200):
+    
+    theme = "dark" if st.get_option("theme.base") == "dark" else "light"
+    text_color = "#FFFFFF" if theme == "dark" else "#31333f"
+    bg_color = "#262730" if theme == "dark" else "#f0f2f6"
+    font = '"Source Sans Pro", sans-serif"'
+    theme = st_theme()
+    try:
+        bg_color = theme["secondaryBackgroundColor"]
+        text_color = theme["textColor"]
+        font = theme["font"]
+    except:
+        pass
+
+
+    direction = "rtl" if is_rtl else "ltr"
+    text_align = "right" if is_rtl else "left"
+
+    html = f"""
+    <div style="
+        direction: {direction}; 
+        text-align: {text_align};
+        height: {height}px;
+        overflow-y: auto;
+        padding: 10px;
+        background-color: {bg_color};
+        color: {text_color};
+        font-family: {font};
+        border-radius: 4px;
+        border: 1px solid rgba(128, 128, 128, 0.2);
+    ">
+        {text}
+    </div>
+    """
+    components.html(html, height=height + 30)
 
 
 if __name__ == "__main__":
