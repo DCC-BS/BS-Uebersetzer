@@ -1,8 +1,13 @@
 import streamlit as st
 import tempfile
 import os
-from utils import DOMAIN_MAPPING, LANGUAGE_MAPPING, TONE_MAPPING, is_rtl_language
-from xml_translate import translate_docx, translate_text
+from translator.utils import (
+    DOMAIN_MAPPING,
+    LANGUAGE_MAPPING,
+    TONE_MAPPING,
+    is_rtl_language,
+)
+from translator import TextTranslator, DocxTranslator, TranslationConfig
 import pyperclip
 from pathlib import Path
 import base64
@@ -12,88 +17,48 @@ from streamlit_theme import st_theme
 
 def main():
     st.set_page_config(page_title="BS Übersetzer", page_icon="🌐", layout="wide")
-
     st.title("Basel Stadt Übersetzer")
+    show_disclaimer()
 
+    config = create_translation_config()
+
+    text_section(config)
+    st.markdown("---")
+    docx_section(config)
+    footer()
+
+
+def show_disclaimer():
     with st.expander("⚠️ Disclaimer", expanded=False):
         st.warning("""
         **Disclaimer / Haftungsausschluss**
         
-        Diese Webanwendung verwendet interne Large Language Models (LLMs) zur Verarbeitung Ihrer Anfragen. Alle Daten werden innerhalb des Kantons Basel-Stadt gespeichert und verarbeitet.
+        Diese Webanwendung verwendet interne Large Language Models (LLMs) zur Verarbeitung Ihrer Anfragen. 
+        Alle Daten werden innerhalb des Kantons Basel-Stadt gespeichert und verarbeitet.
 
-        **Wichtiger Hinweis:** Diese Anwendung befindet sich im Proof-of-Concept (PoC) Stadium. Es wird keine Garantie für die Verfügbarkeit, Korrektheit oder Vollständigkeit der Ergebnisse übernommen. Die zugrundeliegende KI Plattform befindet sich im aktiven Aufbau, daher können die Antwortzeiten stark variieren.
+        **Wichtiger Hinweis:** Diese Anwendung befindet sich im Proof-of-Concept (PoC) Stadium. 
+        Es wird keine Garantie für die Verfügbarkeit, Korrektheit oder Vollständigkeit der Ergebnisse übernommen. 
+        Die zugrundeliegende KI Plattform befindet sich im aktiven Aufbau, daher können die Antwortzeiten stark variieren.
 
         Bei Fehlern oder Problemen wenden Sie sich bitte an [Yanick Schraner](mailto:yanick.schraner@bs.ch).
         """)
 
-    text_section()
-    st.markdown("---")
-    docx_section()
-    footer()
 
-
-def text_section():
+def text_section(config: TranslationConfig):
     st.header("Text übersetzen")
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-
-    with col1:
-        st.selectbox(
-            "Ausgangssprache",
-            list(LANGUAGE_MAPPING.keys()),
-            index=0,
-            key="source_lang",
-        )
-
-    with col2:
-        st.selectbox(
-            "Zielsprache",
-            list(LANGUAGE_MAPPING.keys())[1:],
-            index=0,
-            key="target_lang",
-        )
-    with col3:
-        st.selectbox(
-            "Tonalität (Optional)",
-            list(TONE_MAPPING.keys()),
-            index=0,
-            key="tone",
-            help="Wählen Sie den gewünschten Schreibstil für die Übersetzung:\n\n"
-            + "• Keiner: Neutraler, sachlicher Stil\n\n"
-            + "• Formell: Professioneller Stil für offizielle Dokumente\n\n"
-            + "• Informell: Lockerer, persönlicher Konversationsstil\n\n"
-            + "• Technisch: Fachspezifischer Stil mit Fachterminologie",
-        )
-    with col4:
-        st.selectbox(
-            "Fachgebiet (Optional)",
-            list(DOMAIN_MAPPING.keys()),
-            key="domain",
-            index=0,
-            help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung. "
-            + "Dies hilft dem System, die richtige Fachterminologie und "
-            + "kontextspezifische Übersetzungen zu verwenden.",
-        )
-    with col5:
-        st.text_input(
-            "Glossar (Optional)",
-            placeholder="Wiese:Ein Fluss in Basel;Wickelfisch:Wasserdichte Schwimmtasche",
-            key="glossary",
-            help="Geben Sie ein benutzerdefiniertes Glossar an, um spezifische Begriffe oder Ausdrücke zu beschreiben. "
-            + "Das Format sollte 'Begriff1:Beschreibung1;Begriff2:Beschreibung2,...' sein.",
-        )
+    translator = TextTranslator()
 
     # Create two columns for input and output text
     text_col1, text_col2 = st.columns(2)
 
     with text_col1:
         st.subheader("Ausgangstext")
-        source_text = st.text_area("Text zum Übersetzen eingeben", height=200)
+        source_text = st.text_area("Text zum übersetzen eingeben", height=200)
 
     with text_col2:
         st.subheader("Übersetzung")
         is_rtl = False
-        # Initialize translated_text in session state if it doesn't exist
         if "translated_text" not in st.session_state:
             st.session_state.translated_text = ""
         else:
@@ -108,25 +73,19 @@ def text_section():
     if st.button("Übersetzen"):
         if source_text:
             with st.spinner("Übersetzung läuft..."):
-                translated_text = translate_text(
-                    source_text,
-                    source_language=LANGUAGE_MAPPING.get(st.session_state.source_lang),
-                    target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
-                    tone=TONE_MAPPING.get(st.session_state.tone),
-                    domain=DOMAIN_MAPPING.get(st.session_state.domain),
-                    glossary=st.session_state.glossary,
-
+                st.session_state.translated_text = translator.translate_text(
+                    source_text, config
                 )
-                st.session_state.translated_text = translated_text
                 st.rerun()
 
 
-def docx_section():
-    # Document Translation Section
+def docx_section(config: TranslationConfig):
     st.header("Dokumentübersetzung")
-    st.write("Optional können Sie ein Word-Dokument (.docx) zum Übersetzen hochladen")
+    st.write("Optional können Sie ein Word-Dokument (.docx) zum übersetzen hochladen")
 
-    # Initialize session state for storing the translated document
+    translator = DocxTranslator()
+
+    # Initialize session state
     if "translated_doc" not in st.session_state:
         st.session_state.translated_doc = None
         st.session_state.original_filename = None
@@ -149,15 +108,7 @@ def docx_section():
 
         try:
             with st.spinner("Übersetzung läuft..."):
-                translate_docx(
-                    input_path,
-                    output_path,
-                    source_language=LANGUAGE_MAPPING.get(st.session_state.source_lang),
-                    target_language=LANGUAGE_MAPPING.get(st.session_state.target_lang),
-                    tone=TONE_MAPPING.get(st.session_state.tone),
-                    domain=DOMAIN_MAPPING.get(st.session_state.domain),
-                    glossary=st.session_state.glossary,
-                )
+                translator.translate(input_path, output_path, config)
 
             with open(output_path, "rb") as file:
                 st.session_state.translated_doc = file.read()
@@ -179,6 +130,61 @@ def docx_section():
             file_name=f"translated_{st.session_state.original_filename}",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+
+
+def create_translation_config():
+    """Creates and returns a TranslationConfig object based on user input"""
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        source_lang = st.selectbox(
+            "Ausgangssprache",
+            list(LANGUAGE_MAPPING.keys()),
+            index=0,
+            key="source_lang",
+        )
+
+    with col2:
+        target_lang = st.selectbox(
+            "Zielsprache",
+            list(LANGUAGE_MAPPING.keys())[1:],
+            index=0,
+            key="target_lang",
+        )
+
+    with col3:
+        tone = st.selectbox(
+            "Tonalität (Optional)",
+            list(TONE_MAPPING.keys()),
+            index=0,
+            key="tone",
+            help="Wählen Sie den gewünschten Schreibstil für die Übersetzung",
+        )
+
+    with col4:
+        domain = st.selectbox(
+            "Fachgebiet (Optional)",
+            list(DOMAIN_MAPPING.keys()),
+            key="domain",
+            index=0,
+            help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung",
+        )
+
+    with col5:
+        glossary = st.text_input(
+            "Glossar (Optional)",
+            placeholder="Begriff1:Beschreibung1;Begriff2:Beschreibung2",
+            key="glossary",
+            help="Geben Sie ein benutzerdefiniertes Glossar an",
+        )
+
+    return TranslationConfig(
+        target_language=LANGUAGE_MAPPING.get(target_lang),
+        source_language=LANGUAGE_MAPPING.get(source_lang),
+        tone=TONE_MAPPING.get(tone),
+        domain=DOMAIN_MAPPING.get(domain),
+        glossary=glossary,
+    )
 
 
 def footer():
