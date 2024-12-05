@@ -7,7 +7,7 @@ from translator.utils import (
     TONE_MAPPING,
     is_rtl_language,
 )
-from translator import TextTranslator, DocxTranslator, TranslationConfig
+from translator import TextTranslator, DocxTranslator, PdfTranslator, TranslationConfig
 import pyperclip
 from pathlib import Path
 import base64
@@ -24,7 +24,7 @@ def main():
 
     text_section(config)
     st.markdown("---")
-    docx_section(config)
+    document_section(config)
     footer()
 
 
@@ -79,11 +79,9 @@ def text_section(config: TranslationConfig):
                 st.rerun()
 
 
-def docx_section(config: TranslationConfig):
+def document_section(config: TranslationConfig):
     st.header("Dokumentübersetzung")
-    st.write("Optional können Sie ein Word-Dokument (.docx) zum übersetzen hochladen")
-
-    translator = DocxTranslator()
+    st.write("Optional können Sie ein Word-Dokument (.docx) oder PDF Dokument zum übersetzen hochladen")
 
     # Initialize session state
     if "translated_doc" not in st.session_state:
@@ -91,23 +89,28 @@ def docx_section(config: TranslationConfig):
         st.session_state.original_filename = None
 
     # File uploader
-    uploaded_file = st.file_uploader("DOCX-Datei auswählen", type="docx")
+    uploaded_file = st.file_uploader("DOCX-Datei auswählen", type=["docx", "pdf"])
 
     if uploaded_file is not None and (
         st.session_state.original_filename != uploaded_file.name
     ):
         st.session_state.translated_doc = None
         st.session_state.original_filename = uploaded_file.name
+        suffix = uploaded_file.name.split('.')[-1]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_input:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp_input:
             tmp_input.write(uploaded_file.getvalue())
             input_path = tmp_input.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_output:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp_output:
             output_path = tmp_output.name
 
         try:
             with st.spinner("Übersetzung läuft..."):
+                if suffix == 'pdf':
+                    translator = PdfTranslator()
+                elif suffix == 'docx':
+                    translator = DocxTranslator()
                 translator.translate(input_path, output_path, config)
 
             with open(output_path, "rb") as file:
@@ -115,7 +118,7 @@ def docx_section(config: TranslationConfig):
 
         except Exception as e:
             st.error(f"Bei der Übersetzung ist ein Fehler aufgetreten: {str(e)}")
-
+            raise e
         finally:
             try:
                 os.unlink(input_path)
@@ -124,11 +127,12 @@ def docx_section(config: TranslationConfig):
                 pass
 
     if st.session_state.translated_doc is not None:
+        mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if st.session_state.original_filename.endswith('docx') else "application/pdf"
         st.download_button(
             label="Übersetzte Datei herunterladen",
             data=st.session_state.translated_doc,
             file_name=f"translated_{st.session_state.original_filename}",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            mime=mime,
         )
 
 
