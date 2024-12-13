@@ -141,6 +141,24 @@ def create_translation_config():
     # Handle parameters in url
     query_params = st.query_params
 
+    url_source = query_params.get('source', [None]) if 'source' in query_params else None
+    source_index = 0
+    if url_source:
+        url_source = url_source.capitalize()
+        try:
+            source_index = list(LANGUAGE_MAPPING.values()).index(url_source)
+        except ValueError:
+            pass
+
+    url_target = query_params.get('target', [None]) if 'target' in query_params else None
+    target_index = 0
+    if url_target:
+        url_target = url_target.capitalize()
+        try:
+            target_index = list(LANGUAGE_MAPPING.values())[1:].index(url_target)
+        except ValueError:
+            pass
+        
     url_tone = query_params.get('tonality', [None]) if 'tonality' in query_params else None
     tone_index = 0
     if url_tone:
@@ -149,9 +167,16 @@ def create_translation_config():
             tone_index = list(TONE_MAPPING.values()).index(url_tone)
         except ValueError:
             pass
-    
-    
-    
+
+    url_domain = query_params.get('domain', [None]) if 'domain' in query_params else None
+    domain_index = 0
+    if url_domain:
+        url_domain = url_domain.capitalize()
+        try:
+            domain_index = list(DOMAIN_MAPPING.values()).index(url_domain)
+        except ValueError:
+            pass
+
     # Configure translation settings
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -159,7 +184,7 @@ def create_translation_config():
         source_lang = st.selectbox(
             "Ausgangssprache",
             list(LANGUAGE_MAPPING.keys()),
-            index=0,
+            index=source_index,
             key="source_lang",
         )
 
@@ -167,7 +192,7 @@ def create_translation_config():
         target_lang = st.selectbox(
             "Zielsprache",
             list(LANGUAGE_MAPPING.keys())[1:],
-            index=0,
+            index=target_index,
             key="target_lang",
         )
 
@@ -185,7 +210,7 @@ def create_translation_config():
             "Fachgebiet (Optional)",
             list(DOMAIN_MAPPING.keys()),
             key="domain",
-            index=0,
+            index=domain_index,
             help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung",
         )
 
