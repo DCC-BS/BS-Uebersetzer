@@ -13,6 +13,7 @@ from pathlib import Path
 import base64
 import streamlit.components.v1 as components
 from streamlit_theme import st_theme
+from urllib.parse import unquote
 
 
 def main():
@@ -177,6 +178,11 @@ def create_translation_config():
         except ValueError:
             pass
 
+    url_glossary = query_params.get('glossary', [None]) if 'glossary' in query_params else None
+    glossary_default = ""
+    if url_glossary:
+        glossary_default = unquote(url_glossary)
+
     # Configure translation settings
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -217,6 +223,7 @@ def create_translation_config():
     with col5:
         glossary = st.text_input(
             "Glossar (Optional)",
+            value=glossary_default,
             placeholder="Begriff1:Beschreibung1;Begriff2:Beschreibung2",
             key="glossary",
             help="Geben Sie ein benutzerdefiniertes Glossar an",
