@@ -138,6 +138,21 @@ def document_section(config: TranslationConfig):
 
 def create_translation_config():
     """Creates and returns a TranslationConfig object based on user input"""
+    # Handle parameters in url
+    query_params = st.query_params
+
+    url_tone = query_params.get('tonality', [None]) if 'tonality' in query_params else None
+    tone_index = 0
+    if url_tone:
+        url_tone = url_tone.capitalize()
+        try:
+            tone_index = list(TONE_MAPPING.values()).index(url_tone)
+        except ValueError:
+            pass
+    
+    
+    
+    # Configure translation settings
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
@@ -160,7 +175,7 @@ def create_translation_config():
         tone = st.selectbox(
             "Tonalität (Optional)",
             list(TONE_MAPPING.keys()),
-            index=0,
+            index=tone_index,
             key="tone",
             help="Wählen Sie den gewünschten Schreibstil für die Übersetzung",
         )
