@@ -37,6 +37,7 @@ class PdfTranslator(BaseTranslator):
             current_fitz_page = new_fitz_doc.new_page(
                 width=doc[0].rect.width, height=doc[0].rect.height
             )
+            total_additional_v_space = 0
 
             for item, level in result.document.iterate_items():
                 page_num = item.prov[0].page_no - 1
@@ -54,13 +55,19 @@ class PdfTranslator(BaseTranslator):
                     page_height = result.pages[page_num].size.height
                     rect = bbox.to_top_left_origin(page_height=page_height).as_tuple()
                     rect = fitz.Rect(rect)
-                    font, fontsize, fontcolor, alignment = self._get_fonts_in_rect(
+
+                    font, fontsize, fontcolor, alignment, line_spacing = self._get_fonts_in_rect(
                         doc[page_num], rect
                     )
                     fontsize = math.floor(fontsize) - 2
                     text_writer = fitz.TextWriter(
                         current_fitz_page.rect, color=fontcolor
                     )
+
+                    # Shift rect down according to the previously moved elements
+                    rect.y0 += total_additional_v_space
+                    rect.y1 += total_additional_v_space
+
                     not_written_lines = text_writer.fill_textbox(
                         rect,
                         translated_text,
@@ -68,8 +75,33 @@ class PdfTranslator(BaseTranslator):
                         fontsize=fontsize,
                         align=alignment,
                     )
-                    print("Warning, those lines were not written: ", not_written_lines)
                     text_writer.write_text(current_fitz_page)
+                    
+                    if not_written_lines:
+                        additional_v_space = 0
+                        not_written_text = ""
+                        for text, text_length in not_written_lines:
+                            additional_v_space += line_spacing + fontsize + line_spacing
+                            not_written_text += text
+                        
+                        if additional_v_space > 0:
+                            additional_v_space -= line_spacing # Remove the last line spacing
+                            additional_v_space += font.ascender * 1.2
+                        new_rect = fitz.Rect((rect.x0, text_writer.last_point.y, rect.x1, text_writer.last_point.y+additional_v_space))
+                        # Write the lines that are missing
+                        try:
+                            text_writer.fill_textbox(
+                                new_rect,
+                                not_written_text,
+                                font=font,
+                                fontsize=fontsize,
+                                align=alignment
+                            )
+                        except Exception as e:
+                            print(e)
+                        text_writer.write_text(current_fitz_page)
+
+                    # print("Warning, those lines were not written: ", not_written_lines)
 
             for page_num in range(doc.page_count):
                 page = doc[page_num]
@@ -103,7 +135,7 @@ class PdfTranslator(BaseTranslator):
             rect: fitz.Rect object - The rectangle area to check for fonts
 
         Returns:
-            tuple: The most common font as fitz.Font, average font size, most common font color, majority text alignment
+            tuple: The most common font as fitz.Font, average font size, most common font color, majority text alignment, average line spacing
         """
         try:
             from collections import Counter
@@ -120,7 +152,8 @@ class PdfTranslator(BaseTranslator):
                 "font_colors": [],
                 "font_flags": [],
                 "font_ascender": [],
-                "font_descender": []
+                "font_descender": [],
+                "font_linespacing": []
             }
 
             # Thresholds and tolerances
@@ -163,6 +196,7 @@ class PdfTranslator(BaseTranslator):
                             font_properties["font_descender"].append(font_descender)
 
                             line_spacing = line_height - font_size
+                            font_properties["font_linespacing"].append(line_spacing)
 
                     # Determine alignment
                     if width_ratio >= full_width_threshold:
@@ -205,6 +239,8 @@ class PdfTranslator(BaseTranslator):
             font_descender_counter = Counter(font_properties["font_descender"])
             most_common_font_descender = font_descender_counter.most_common(1)[0][0]
 
+            average_line_spacing = sum(font_properties["font_linespacing"]) / len(font_properties["font_linespacing"])
+
             # Convert font color to RGB tuple if necessary
             if isinstance(most_common_font_color, int):
                 r = ((most_common_font_color >> 16) & 0xFF) / 255
@@ -222,6 +258,7 @@ class PdfTranslator(BaseTranslator):
                 average_font_size,
                 most_common_font_color,
                 majority_alignment,
+                average_line_spacing
             )
 
         except Exception as e:
@@ -314,9 +351,5 @@ class PdfTranslator(BaseTranslator):
                     font = fitz.Font(base_font, is_italic=1)
             else:
                 font = fitz.Font(base_font)
-
-            # Set the ascender and descender properties
-            # font.ascender = ascender
-            # font.descender = descender
 
             return font
