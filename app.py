@@ -13,6 +13,7 @@ from pathlib import Path
 import base64
 import streamlit.components.v1 as components
 from streamlit_theme import st_theme
+from urllib.parse import quote, unquote
 
 
 def main():
@@ -138,31 +139,79 @@ def document_section(config: TranslationConfig):
 
 def create_translation_config():
     """Creates and returns a TranslationConfig object based on user input"""
+    # Handle parameters in url
+    query_params = st.query_params
+
+    url_source = query_params.get('source', [None]) if 'source' in query_params else None
+    source_index = 0
+    if url_source:
+        url_source = url_source.capitalize()
+        try:
+            source_index = list(LANGUAGE_MAPPING.values()).index(url_source)
+        except ValueError:
+            pass
+
+    url_target = query_params.get('target', [None]) if 'target' in query_params else None
+    target_index = 0
+    if url_target:
+        url_target = url_target.capitalize()
+        try:
+            target_index = list(LANGUAGE_MAPPING.values())[1:].index(url_target)
+        except ValueError:
+            pass
+        
+    url_tone = query_params.get('tonality', [None]) if 'tonality' in query_params else None
+    tone_index = 0
+    if url_tone:
+        url_tone = url_tone.capitalize()
+        try:
+            tone_index = list(TONE_MAPPING.values()).index(url_tone)
+        except ValueError:
+            pass
+
+    url_domain = query_params.get('domain', [None]) if 'domain' in query_params else None
+    domain_index = 0
+    if url_domain:
+        url_domain = url_domain.capitalize()
+        try:
+            domain_index = list(DOMAIN_MAPPING.values()).index(url_domain)
+        except ValueError:
+            pass
+
+    url_glossary = query_params.get('glossary', [None]) if 'glossary' in query_params else None
+    glossary_default = ""
+    if url_glossary:
+        glossary_default = unquote(url_glossary)
+
+    # Configure translation settings
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         source_lang = st.selectbox(
             "Ausgangssprache",
             list(LANGUAGE_MAPPING.keys()),
-            index=0,
+            index=source_index,
             key="source_lang",
+            on_change=update_url_params
         )
 
     with col2:
         target_lang = st.selectbox(
             "Zielsprache",
             list(LANGUAGE_MAPPING.keys())[1:],
-            index=0,
+            index=target_index,
             key="target_lang",
+            on_change=update_url_params
         )
 
     with col3:
         tone = st.selectbox(
             "Tonalität (Optional)",
             list(TONE_MAPPING.keys()),
-            index=0,
+            index=tone_index,
             key="tone",
             help="Wählen Sie den gewünschten Schreibstil für die Übersetzung",
+            on_change=update_url_params
         )
 
     with col4:
@@ -170,16 +219,19 @@ def create_translation_config():
             "Fachgebiet (Optional)",
             list(DOMAIN_MAPPING.keys()),
             key="domain",
-            index=0,
+            index=domain_index,
             help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung",
+            on_change=update_url_params
         )
 
     with col5:
         glossary = st.text_input(
             "Glossar (Optional)",
+            value=glossary_default,
             placeholder="Begriff1:Beschreibung1;Begriff2:Beschreibung2",
             key="glossary",
             help="Geben Sie ein benutzerdefiniertes Glossar an",
+            on_change=update_url_params
         )
 
     return TranslationConfig(
@@ -266,6 +318,38 @@ def create_text_component(text, is_rtl=False, height=200):
     <textarea id="translatedText" inputmode="text" rows="3">{text}</textarea>
 """
     components.html(html, height=height + 30)
+
+
+def update_url_params():
+    """Update URL parameters based on current selection"""
+    # Create a dictionary to store all potential parameters
+    all_params = {
+        'source': LANGUAGE_MAPPING.get(st.session_state.source_lang),
+        'target': LANGUAGE_MAPPING.get(st.session_state.target_lang),
+        'tonality': TONE_MAPPING.get(st.session_state.tone),
+        'domain': DOMAIN_MAPPING.get(st.session_state.domain),
+        'glossary': st.session_state.glossary
+    }
+    
+    params = {}
+    
+    for key in ['source', 'target', 'tonality', 'domain', 'glossary']:
+        if all_params[key]:
+            # Skip default values
+            if (key == 'tonality' and all_params[key] == list(TONE_MAPPING.values())[0]) or \
+               (key == 'domain' and all_params[key] == list(DOMAIN_MAPPING.values())[0]) or \
+               (key == 'glossary' and not all_params[key].strip()):
+                continue
+                
+            if key == 'glossary':
+                params[key] = quote(all_params[key])
+            else:
+                params[key] = all_params[key].lower()
+
+    # Clear all parameters and set new ones
+    st.query_params.clear()
+    if params:
+        st.query_params.update(params)
 
 
 if __name__ == "__main__":
