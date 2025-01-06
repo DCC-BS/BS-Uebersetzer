@@ -257,7 +257,7 @@ def footer():
                     <img src="data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode()}" width="100">
                 </a>
                 <p style='margin-top: 10px;'>Datenwissenschaften und KI</p>
-                <p>Developped with ❤️ by Data Alchemy Team</p>
+                <p>Developed with ❤️ by Data Alchemy Team</p>
             </div>
             """,
             unsafe_allow_html=True,
