@@ -170,11 +170,15 @@ def create_translation_config():
             pass
 
     url_domain = query_params.get('domain', [None]) if 'domain' in query_params else None
+    print(url_domain)
     domain_index = 0
     if url_domain:
-        url_domain = url_domain.capitalize()
+        url_domain = url_domain.lower()
+        print(url_domain)
         try:
-            domain_index = list(DOMAIN_MAPPING.values()).index(url_domain)
+            domain_index = [domain.lower() for domain in DOMAIN_MAPPING.values() if domain].index(url_domain)
+            # Filter out "Keine" domain, therefore add index + 1
+            domain_index += 1
         except ValueError:
             pass
 
