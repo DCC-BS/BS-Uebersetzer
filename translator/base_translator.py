@@ -1,10 +1,16 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from ollama import Client
+from openai import Client
+import httpx
+import truststore
+import ssl
 
 from translator.config import LLMConfig, TranslationConfig
 from translator.utils import detect_language
+
+
+ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
 class BaseTranslator(ABC):
@@ -13,7 +19,7 @@ class BaseTranslator(ABC):
     def __init__(self):
         self.llm_config = LLMConfig()
         self.translation_config = TranslationConfig()
-        self.client = Client(host=self.llm_config.base_url)
+        self.client = Client(base_url=self.llm_config.base_url, http_client=httpx.Client(verify=ssl_context))
 
     def _create_prompt(self, text: str, config: TranslationConfig) -> str:
         """Creates the translation prompt"""
