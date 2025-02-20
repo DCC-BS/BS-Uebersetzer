@@ -97,15 +97,13 @@ class BaseTranslator(ABC):
         endswith_r = text.endswith("\r")
 
         prompt = self._create_prompt(text, config)
-        response = self.client.generate(
+        response = self.client.completions.create(
             model=self.llm_config.model,
             prompt=prompt,
-            options={
-                "temperature": self.llm_config.temperature,
-                "num_ctx": self.llm_config.num_ctx,
-                "frequency_penalty": self.llm_config.frequency_penalty,
-                "top_p": self.llm_config.top_p,
-            }   
+            temperature=self.llm_config.temperature,
+            max_tokens=self.llm_config.num_ctx,
+            frequency_penalty=self.llm_config.frequency_penalty,
+            top_p=self.llm_config.top_p    
         )
 
         translation_text = self._process_response(response.response)
