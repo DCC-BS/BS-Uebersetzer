@@ -1,19 +1,21 @@
-import streamlit as st
-import tempfile
+import base64
 import os
+import tempfile
+from pathlib import Path
+from urllib.parse import quote, unquote
+
+import pyperclip
+import streamlit as st
+import streamlit.components.v1 as components
+from streamlit_theme import st_theme
+
+from translator import DocxTranslator, PdfTranslator, TextTranslator, TranslationConfig
 from translator.utils import (
     DOMAIN_MAPPING,
     LANGUAGE_MAPPING,
     TONE_MAPPING,
     is_rtl_language,
 )
-from translator import TextTranslator, DocxTranslator, PdfTranslator, TranslationConfig
-import pyperclip
-from pathlib import Path
-import base64
-import streamlit.components.v1 as components
-from streamlit_theme import st_theme
-from urllib.parse import quote, unquote
 
 
 def main():
@@ -82,7 +84,7 @@ def text_section(config: TranslationConfig):
 
 def document_section(config: TranslationConfig):
     st.header("Dokumentübersetzung")
-    st.write("Optional können Sie ein Word-Dokument (.docx) oder PDF Dokument zum übersetzen hochladen")
+    st.write("Optional können Sie ein Word-Dokument (.docx) zum übersetzen hochladen")
 
     # Initialize session state
     if "translated_doc" not in st.session_state:
@@ -90,27 +92,32 @@ def document_section(config: TranslationConfig):
         st.session_state.original_filename = None
 
     # File uploader
-    uploaded_file = st.file_uploader("DOCX-Datei auswählen", type=["docx", "pdf"])
+    uploaded_file = st.file_uploader("DOCX-Datei auswählen", type=["docx"])
 
     if uploaded_file is not None and (
         st.session_state.original_filename != uploaded_file.name
     ):
         st.session_state.translated_doc = None
         st.session_state.original_filename = uploaded_file.name
-        suffix = uploaded_file.name.split('.')[-1]
+        suffix = uploaded_file.name.split(".")[-1]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp_input:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=f".{suffix}"
+        ) as tmp_input:
             tmp_input.write(uploaded_file.getvalue())
             input_path = tmp_input.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp_output:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=f".{suffix}"
+        ) as tmp_output:
             output_path = tmp_output.name
 
         try:
             with st.spinner("Übersetzung läuft..."):
-                if suffix == 'pdf':
-                    translator = PdfTranslator()
-                elif suffix == 'docx':
+                if suffix == "pdf":
+                    pass
+                    # translator = PdfTranslator()
+                elif suffix == "docx":
                     translator = DocxTranslator()
                 translator.translate(input_path, output_path, config)
 
@@ -128,7 +135,11 @@ def document_section(config: TranslationConfig):
                 pass
 
     if st.session_state.translated_doc is not None:
-        mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if st.session_state.original_filename.endswith('docx') else "application/pdf"
+        mime = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if st.session_state.original_filename.endswith("docx")
+            else "application/pdf"
+        )
         st.download_button(
             label="Übersetzte Datei herunterladen",
             data=st.session_state.translated_doc,
@@ -142,7 +153,9 @@ def create_translation_config():
     # Handle parameters in url
     query_params = st.query_params
 
-    url_source = query_params.get('source', [None]) if 'source' in query_params else None
+    url_source = (
+        query_params.get("source", [None]) if "source" in query_params else None
+    )
     source_index = 0
     if url_source:
         url_source = url_source.capitalize()
@@ -151,7 +164,9 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_target = query_params.get('target', [None]) if 'target' in query_params else None
+    url_target = (
+        query_params.get("target", [None]) if "target" in query_params else None
+    )
     target_index = 0
     if url_target:
         url_target = url_target.capitalize()
@@ -159,8 +174,10 @@ def create_translation_config():
             target_index = list(LANGUAGE_MAPPING.values())[1:].index(url_target)
         except ValueError:
             pass
-        
-    url_tone = query_params.get('tonality', [None]) if 'tonality' in query_params else None
+
+    url_tone = (
+        query_params.get("tonality", [None]) if "tonality" in query_params else None
+    )
     tone_index = 0
     if url_tone:
         url_tone = url_tone.capitalize()
@@ -169,20 +186,26 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_domain = query_params.get('domain', [None]) if 'domain' in query_params else None
+    url_domain = (
+        query_params.get("domain", [None]) if "domain" in query_params else None
+    )
     print(url_domain)
     domain_index = 0
     if url_domain:
         url_domain = url_domain.lower()
         print(url_domain)
         try:
-            domain_index = [domain.lower() for domain in DOMAIN_MAPPING.values() if domain].index(url_domain)
+            domain_index = [
+                domain.lower() for domain in DOMAIN_MAPPING.values() if domain
+            ].index(url_domain)
             # Filter out "Keine" domain, therefore add index + 1
             domain_index += 1
         except ValueError:
             pass
 
-    url_glossary = query_params.get('glossary', [None]) if 'glossary' in query_params else None
+    url_glossary = (
+        query_params.get("glossary", [None]) if "glossary" in query_params else None
+    )
     glossary_default = ""
     if url_glossary:
         glossary_default = unquote(url_glossary)
@@ -196,7 +219,7 @@ def create_translation_config():
             list(LANGUAGE_MAPPING.keys()),
             index=source_index,
             key="source_lang",
-            on_change=update_url_params
+            on_change=update_url_params,
         )
 
     with col2:
@@ -205,7 +228,7 @@ def create_translation_config():
             list(LANGUAGE_MAPPING.keys())[1:],
             index=target_index,
             key="target_lang",
-            on_change=update_url_params
+            on_change=update_url_params,
         )
 
     with col3:
@@ -215,7 +238,7 @@ def create_translation_config():
             index=tone_index,
             key="tone",
             help="Wählen Sie den gewünschten Schreibstil für die Übersetzung",
-            on_change=update_url_params
+            on_change=update_url_params,
         )
 
     with col4:
@@ -225,7 +248,7 @@ def create_translation_config():
             key="domain",
             index=domain_index,
             help="Wählen Sie das passende Fachgebiet für Ihre Übersetzung",
-            on_change=update_url_params
+            on_change=update_url_params,
         )
 
     with col5:
@@ -235,7 +258,7 @@ def create_translation_config():
             placeholder="Begriff1:Beschreibung1;Begriff2:Beschreibung2",
             key="glossary",
             help="Geben Sie ein benutzerdefiniertes Glossar an",
-            on_change=update_url_params
+            on_change=update_url_params,
         )
 
     return TranslationConfig(
@@ -328,24 +351,32 @@ def update_url_params():
     """Update URL parameters based on current selection"""
     # Create a dictionary to store all potential parameters
     all_params = {
-        'source': LANGUAGE_MAPPING.get(st.session_state.source_lang),
-        'target': LANGUAGE_MAPPING.get(st.session_state.target_lang),
-        'tonality': TONE_MAPPING.get(st.session_state.tone),
-        'domain': DOMAIN_MAPPING.get(st.session_state.domain),
-        'glossary': st.session_state.glossary
+        "source": LANGUAGE_MAPPING.get(st.session_state.source_lang),
+        "target": LANGUAGE_MAPPING.get(st.session_state.target_lang),
+        "tonality": TONE_MAPPING.get(st.session_state.tone),
+        "domain": DOMAIN_MAPPING.get(st.session_state.domain),
+        "glossary": st.session_state.glossary,
     }
-    
+
     params = {}
-    
-    for key in ['source', 'target', 'tonality', 'domain', 'glossary']:
+
+    for key in ["source", "target", "tonality", "domain", "glossary"]:
         if all_params[key]:
             # Skip default values
-            if (key == 'tonality' and all_params[key] == list(TONE_MAPPING.values())[0]) or \
-               (key == 'domain' and all_params[key] == list(DOMAIN_MAPPING.values())[0]) or \
-               (key == 'glossary' and not all_params[key].strip()):
+            if (
+                (
+                    key == "tonality"
+                    and all_params[key] == list(TONE_MAPPING.values())[0]
+                )
+                or (
+                    key == "domain"
+                    and all_params[key] == list(DOMAIN_MAPPING.values())[0]
+                )
+                or (key == "glossary" and not all_params[key].strip())
+            ):
                 continue
-                
-            if key == 'glossary':
+
+            if key == "glossary":
                 params[key] = quote(all_params[key])
             else:
                 params[key] = all_params[key].lower()
