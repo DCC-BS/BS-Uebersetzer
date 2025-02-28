@@ -1,14 +1,13 @@
+import ssl
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from openai import Client
 import httpx
 import truststore
-import ssl
+from openai import Client
 
 from translator.config import LLMConfig, TranslationConfig
 from translator.utils import detect_language
-
 
 ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
@@ -19,7 +18,13 @@ class BaseTranslator(ABC):
     def __init__(self):
         self.llm_config = LLMConfig()
         self.translation_config = TranslationConfig()
-        self.client = Client(base_url=self.llm_config.base_url, http_client=httpx.Client(verify=ssl_context))
+        self.client = Client(
+            base_url=self.llm_config.base_url,
+            http_client=httpx.Client(verify=ssl_context),
+        )
+
+        models = self.client.models.list()
+        self.model_name = models.data[0].id
 
     def _create_prompt(self, text: str, config: TranslationConfig) -> str:
         """Creates the translation prompt"""
@@ -98,12 +103,12 @@ class BaseTranslator(ABC):
 
         prompt = self._create_prompt(text, config)
         response = self.client.completions.create(
-            model=self.llm_config.model,
+            model=self.model_name,
             prompt=prompt,
             temperature=self.llm_config.temperature,
             max_tokens=self.llm_config.num_ctx,
             frequency_penalty=self.llm_config.frequency_penalty,
-            top_p=self.llm_config.top_p    
+            top_p=self.llm_config.top_p,
         )
 
         translation_text = self._process_response(response.response)
