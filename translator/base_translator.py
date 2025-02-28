@@ -31,7 +31,6 @@ class BaseTranslator(ABC):
             base_url=self.llm_config.base_url,
             http_client=httpx.Client(verify=ssl_context),
         )
-        print(self.llm_config.base_url)
         models = self.client.models.list()
         self.model_name = models.data[0].id
 
