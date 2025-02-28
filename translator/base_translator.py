@@ -4,12 +4,20 @@ from typing import Optional
 
 import httpx
 import truststore
-from openai import Client
+from openai import Client, OpenAIError
 
 from translator.config import LLMConfig, TranslationConfig
 from translator.utils import detect_language
 
-ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+try:
+    ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+except Exception:
+    import logging
+
+    logging.warning(
+        "Failed to create truststore SSL context, falling back to standard SSL"
+    )
+    ssl_context = ssl.create_default_context()
 
 
 class BaseTranslator(ABC):
@@ -22,7 +30,7 @@ class BaseTranslator(ABC):
             base_url=self.llm_config.base_url,
             http_client=httpx.Client(verify=ssl_context),
         )
-
+        print(self.llm_config.base_url)
         models = self.client.models.list()
         self.model_name = models.data[0].id
 
@@ -81,11 +89,12 @@ class BaseTranslator(ABC):
 
     def _get_glossary_prompt(self, glossary: Optional[str]) -> str:
         """Generates the glossary-specific part of the prompt"""
+        if glossary is None:
+            return "No specific glossary provided."
+
         glossary = "\n".join(glossary.replace(":", ": ").split(";"))
         return (
             f"Use the following glossary to ensure accurate translations:\n{glossary}"
-            if glossary
-            else "No specific glossary provided."
         )
 
     def translate_text(self, text: str, config: TranslationConfig) -> str:
@@ -111,7 +120,7 @@ class BaseTranslator(ABC):
             top_p=self.llm_config.top_p,
         )
 
-        translation_text = self._process_response(response.response)
+        translation_text = self._process_response(response.choices[0].message.content)
         return translation_text + ("\r" if endswith_r else "")
 
     def _process_response(self, text: str) -> str:

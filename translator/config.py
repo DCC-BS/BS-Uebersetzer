@@ -1,15 +1,18 @@
 # config.py
+import os
 from dataclasses import dataclass
 from typing import Optional
-import os
+
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(".env")
+
 
 @dataclass
 class LLMConfig:
     """Configuration for the LLM service"""
-    base_url: str = os.getenv("BASE_URL", "http://localhost:11434/v1")
+
+    base_url: str = os.getenv("BASE_URL", "http://localhost:8000/v1")
     model: str = os.getenv("LLM_MODEL", "qwen2.5:72b")
     temperature: float = float(os.getenv("LLM_TEMPERATURE", "0"))
     num_ctx: Optional[int] = int(os.getenv("LLM_NUM_CTX", "0")) or None
