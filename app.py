@@ -9,13 +9,17 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_theme import st_theme
 
-from translator import DocxTranslator, PdfTranslator, TextTranslator, TranslationConfig
+from translator import DocxTranslator, TextTranslator, TranslationConfig
 from translator.utils import (
     DOMAIN_MAPPING,
     LANGUAGE_MAPPING,
     TONE_MAPPING,
     is_rtl_language,
 )
+
+# Create singleton instances of translators
+text_translator = TextTranslator()
+docx_translator = DocxTranslator()
 
 
 def main():
@@ -50,7 +54,8 @@ def show_disclaimer():
 def text_section(config: TranslationConfig):
     st.header("Text übersetzen")
 
-    translator = TextTranslator()
+    # Use the global text_translator instance
+    global text_translator
 
     # Create two columns for input and output text
     text_col1, text_col2 = st.columns(2)
@@ -76,7 +81,7 @@ def text_section(config: TranslationConfig):
     if st.button("Übersetzen"):
         if source_text:
             with st.spinner("Übersetzung läuft..."):
-                st.session_state.translated_text = translator.translate_text(
+                st.session_state.translated_text = text_translator.translate_text(
                     source_text, config
                 )
                 st.rerun()
@@ -114,12 +119,10 @@ def document_section(config: TranslationConfig):
 
         try:
             with st.spinner("Übersetzung läuft..."):
-                if suffix == "pdf":
-                    pass
-                    # translator = PdfTranslator()
-                elif suffix == "docx":
-                    translator = DocxTranslator()
-                translator.translate(input_path, output_path, config)
+                # Use the global docx_translator instance
+                global docx_translator
+                if suffix == "docx":
+                    docx_translator.translate(input_path, output_path, config)
 
             with open(output_path, "rb") as file:
                 st.session_state.translated_doc = file.read()
@@ -137,7 +140,8 @@ def document_section(config: TranslationConfig):
     if st.session_state.translated_doc is not None:
         mime = (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            if st.session_state.original_filename.endswith("docx")
+            if st.session_state.original_filename
+            and st.session_state.original_filename.endswith("docx")
             else "application/pdf"
         )
         st.download_button(
@@ -153,9 +157,12 @@ def create_translation_config():
     # Handle parameters in url
     query_params = st.query_params
 
-    url_source = (
-        query_params.get("source", [None]) if "source" in query_params else None
-    )
+    url_source = None
+    if "source" in query_params:
+        url_source = query_params.get("source")
+        if isinstance(url_source, list) and url_source:
+            url_source = url_source[0]
+
     source_index = 0
     if url_source:
         url_source = url_source.capitalize()
@@ -164,9 +171,12 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_target = (
-        query_params.get("target", [None]) if "target" in query_params else None
-    )
+    url_target = None
+    if "target" in query_params:
+        url_target = query_params.get("target")
+        if isinstance(url_target, list) and url_target:
+            url_target = url_target[0]
+
     target_index = 0
     if url_target:
         url_target = url_target.capitalize()
@@ -175,9 +185,12 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_tone = (
-        query_params.get("tonality", [None]) if "tonality" in query_params else None
-    )
+    url_tone = None
+    if "tonality" in query_params:
+        url_tone = query_params.get("tonality")
+        if isinstance(url_tone, list) and url_tone:
+            url_tone = url_tone[0]
+
     tone_index = 0
     if url_tone:
         url_tone = url_tone.capitalize()
@@ -186,14 +199,15 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_domain = (
-        query_params.get("domain", [None]) if "domain" in query_params else None
-    )
-    print(url_domain)
+    url_domain = None
+    if "domain" in query_params:
+        url_domain = query_params.get("domain")
+        if isinstance(url_domain, list) and url_domain:
+            url_domain = url_domain[0]
+
     domain_index = 0
     if url_domain:
         url_domain = url_domain.lower()
-        print(url_domain)
         try:
             domain_index = [
                 domain.lower() for domain in DOMAIN_MAPPING.values() if domain
@@ -203,9 +217,12 @@ def create_translation_config():
         except ValueError:
             pass
 
-    url_glossary = (
-        query_params.get("glossary", [None]) if "glossary" in query_params else None
-    )
+    url_glossary = None
+    if "glossary" in query_params:
+        url_glossary = query_params.get("glossary")
+        if isinstance(url_glossary, list) and url_glossary:
+            url_glossary = url_glossary[0]
+
     glossary_default = ""
     if url_glossary:
         glossary_default = unquote(url_glossary)
@@ -261,11 +278,17 @@ def create_translation_config():
             on_change=update_url_params,
         )
 
+    # Create a TranslationConfig with non-None values
+    source_language = LANGUAGE_MAPPING.get(source_lang, "")
+    target_language = LANGUAGE_MAPPING.get(target_lang, "")
+    tone_value = TONE_MAPPING.get(tone)
+    domain_value = DOMAIN_MAPPING.get(domain)
+
     return TranslationConfig(
-        target_language=LANGUAGE_MAPPING.get(target_lang),
-        source_language=LANGUAGE_MAPPING.get(source_lang),
-        tone=TONE_MAPPING.get(tone),
-        domain=DOMAIN_MAPPING.get(domain),
+        target_language=target_language,
+        source_language=source_language,
+        tone=tone_value,
+        domain=domain_value,
         glossary=glossary,
     )
 
@@ -377,9 +400,9 @@ def update_url_params():
                 continue
 
             if key == "glossary":
-                params[key] = quote(all_params[key])
+                params[key] = quote(str(all_params[key]))
             else:
-                params[key] = all_params[key].lower()
+                params[key] = str(all_params[key]).lower()
 
     # Clear all parameters and set new ones
     st.query_params.clear()
