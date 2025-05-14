@@ -1,4 +1,4 @@
-# translator
+# BS-Übersetzer
 
 Translate PDF or Word Documents to German.
 
