@@ -23,8 +23,8 @@ docx_translator = DocxTranslator()
 
 
 def main():
-    st.set_page_config(page_title="BS Übersetzer", page_icon="🌐", layout="wide")
-    st.title("Basel Stadt Übersetzer")
+    st.set_page_config(page_title="BS-Übersetzer", page_icon="🌐", layout="wide")
+    st.title("BS-Übersetzer")
     show_disclaimer()
 
     config = create_translation_config()
